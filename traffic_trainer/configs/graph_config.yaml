@@ -1,0 +1,81 @@
+# Configuration for Spatio-Temporal Graph Neural Network
+# This config is for graph-based traffic prediction that models
+# interactions between connected road segments.
+
+paths:
+  csv_path: traffic_weather_2025_converted.csv
+  output_dir: experiments/run01
+
+data:
+  numerical_features:
+    - length
+    - max_velocity
+    - temperature_2m
+    - dew_point_2m
+    - relative_humidity_2m
+    - wind_speed_10m
+    - wind_direction_10m
+    - wind_gusts_10m
+    - rain
+    - apparent_temperature
+    - pressure_msl
+    - surface_pressure
+    - sunshine_duration
+    - soil_temperature_0_to_7cm
+    - soil_moisture_0_to_7cm
+    - cloud_cover
+    - cloud_cover_low
+    - cloud_cover_mid
+    - cloud_cover_high
+  categorical_features:
+    - weekday
+    - period
+    - street_type
+    - street_level
+  prediction_horizons: [1]  # Can add [1, 2, 3, 4] for multi-horizon
+  sequence_length: 8
+  train_ratio: 0.7
+  val_ratio: 0.15
+  resample_rule: 1h
+
+# Graph-specific settings
+graph:
+  gnn_type: gcn         # "gcn" (Graph Convolutional Network) or "gat" (Graph Attention Network)
+  num_gnn_layers: 2     # Number of graph convolution layers
+  gat_heads: 4          # Number of attention heads (only for GAT)
+  add_reverse_edges: true  # Add bidirectional edges for message passing
+
+model:
+  rnn_type: gru         # "lstm" or "gru" for temporal encoding
+  hidden_dim: 128       # Hidden dimension for both RNN and GNN
+  num_layers: 2         # Number of RNN layers
+  dropout: 0.3
+  bidirectional: true
+  time_embedding_dim: 32  # set to integer (e.g. 8) to enable hour-of-day embeddings
+  segment_embedding_dim: 32  # set to integer (e.g. 16) to enable segment embeddings
+
+optimization:
+  batch_size: 16        # Smaller batch size due to graph memory
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  gradient_clip_norm: 1.0
+
+training:
+  epochs: 50
+  num_workers: 0        # Set to 0 for graph data (avoid multiprocessing issues)
+  device: cuda
+
+logging:
+  wandb_project: traffic-graph
+  wandb_entity: null
+  wandb_run_name: stgnn-gcn
+  wandb_mode: online    # "online", "offline", or "disabled"
+
+early_stopping:
+  early_stopping_patience: 10
+  early_stopping_delta: 0.0
+
+checkpoint:
+  checkpoint_every: 5
+  save_optimizer_state: true
+

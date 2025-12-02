@@ -1,0 +1,92 @@
+# Configuration for GMAN++ (Enhanced Multi-Horizon Traffic Prediction)
+
+paths:
+  csv_path: traffic_weather_2025_converted.csv
+  output_dir: experiments/run01
+
+data:
+  numerical_features:
+    - length
+    - max_velocity
+    - current_speed
+    - free_flow_speed
+    - temperature_2m
+    - dew_point_2m
+    - relative_humidity_2m
+    - wind_speed_10m
+    - wind_direction_10m
+    - wind_gusts_10m
+    - rain
+    - apparent_temperature
+    - pressure_msl
+    - surface_pressure
+    - sunshine_duration
+    - soil_temperature_0_to_7cm
+    - soil_moisture_0_to_7cm
+    - cloud_cover
+    - cloud_cover_low
+    - cloud_cover_mid
+    - cloud_cover_high
+  categorical_features:
+    - weekday
+    - period
+    - street_type
+    - street_level
+  # Multi-horizon prediction: 1h, 2h, 3h ahead
+  prediction_horizons: [1, 2, 3]
+  sequence_length: 10
+  train_ratio: 0.7
+  val_ratio: 0.15
+  resample_rule: 1h
+
+# GMAN++ Model settings
+model:
+  type: gman
+  hidden_dim: 128
+  num_layers: 2
+  dropout: 0.2
+  time_embedding_dim: 32  # set to integer (e.g. 8) to enable hour-of-day embeddings
+  segment_embedding_dim: 32  # set to integer (e.g. 16) to enable segment embeddings
+
+gman:
+  num_heads: 1
+  use_spatial_embedding: true
+  use_temporal_conv: true
+
+# Graph settings
+graph:
+  graph_mode: none
+  add_reverse_edges: true
+
+optimization:
+  batch_size: 8
+  learning_rate: 0.0005
+  weight_decay: 0.0001
+  gradient_clip_norm: 1.0
+
+training:
+  epochs: 150
+  num_workers: 0
+  device: cuda
+
+logging:
+  wandb_project: traffic-gman-multihorizon
+  wandb_entity: null
+  wandb_run_name: gman-pp-v1
+  wandb_mode: online
+
+early_stopping:
+  early_stopping_patience: 20
+  early_stopping_delta: 0.0005
+
+checkpoint:
+  checkpoint_every: 10
+  save_optimizer_state: true
+
+# Training improvements
+label_smoothing: 0.05  # Lighter smoothing
+use_class_weights: true
+use_focal_loss: false
+use_ordinal_loss: true  # Ordinal loss for LOS (A < B < C < D < E < F)
+focal_gamma: 2.0
+ordinal_weight: 0.25    # Reduced - was hurting B class

@@ -1,0 +1,69 @@
+paths:
+  csv_path: traffic_weather_2025_converted.csv
+  output_dir: experiments/run01
+
+data:
+  numerical_features:
+    - length
+    - max_velocity
+    - temperature_2m
+    - dew_point_2m
+    - relative_humidity_2m
+    - wind_speed_10m
+    - wind_direction_10m
+    - wind_gusts_10m
+    - rain
+    - apparent_temperature
+    - pressure_msl
+    - surface_pressure
+    - sunshine_duration
+    - soil_temperature_0_to_7cm
+    - soil_moisture_0_to_7cm
+    - cloud_cover
+    - cloud_cover_low
+    - cloud_cover_mid
+    - cloud_cover_high
+  categorical_features:
+    - weekday
+    - period
+    - street_type
+    - street_level
+  prediction_horizons: [3]
+  sequence_length: 3
+  train_ratio: 0.7
+  val_ratio: 0.15
+  resample_rule: 1h
+
+model:
+  rnn_type: lstm
+  hidden_dim: 256
+  num_layers: 2
+  dropout: 0.3
+  bidirectional: true
+  time_embedding_dim: 32  # set to integer (e.g. 8) to enable hour-of-day embeddings
+  segment_embedding_dim: 32  # set to integer (e.g. 16) to enable segment embeddings
+
+optimization:
+  batch_size: 128
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  gradient_clip_norm: 1.0
+
+training:
+  epochs: 40
+  num_workers: 4
+  device: cuda
+
+logging:
+  wandb_project: traffic-weather
+  wandb_entity: your_entity
+  wandb_run_name: gru-hourly
+  wandb_mode: online
+
+early_stopping:
+  early_stopping_patience: 5
+  early_stopping_delta: 0.0
+
+checkpoint:
+  checkpoint_every: 1
+  save_optimizer_state: true
