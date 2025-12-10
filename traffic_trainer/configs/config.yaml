@@ -28,8 +28,8 @@ data:
     - period
     - street_type
     - street_level
-  prediction_horizons: [3]
-  sequence_length: 3
+  prediction_horizons: [1,2,3]
+  sequence_length: 8
   train_ratio: 0.7
   val_ratio: 0.15
   resample_rule: 1h
@@ -58,7 +58,7 @@ logging:
   wandb_project: traffic-weather
   wandb_entity: your_entity
   wandb_run_name: gru-hourly
-  wandb_mode: online
+  wandb_mode: disabled
 
 early_stopping:
   early_stopping_patience: 5

@@ -2,7 +2,7 @@
 
 paths:
   csv_path: traffic_weather_2025_converted.csv
-  output_dir: experiments/run01
+  output_dir: experiments/run_gman_01
 
 data:
   numerical_features:
@@ -34,7 +34,7 @@ data:
     - street_level
   # Multi-horizon prediction: 1h, 2h, 3h ahead
   prediction_horizons: [1, 2, 3]
-  sequence_length: 10
+  sequence_length: 8
   train_ratio: 0.7
   val_ratio: 0.15
   resample_rule: 1h
@@ -73,7 +73,7 @@ logging:
   wandb_project: traffic-gman-multihorizon
   wandb_entity: null
   wandb_run_name: gman-pp-v1
-  wandb_mode: online
+  wandb_mode: disabled
 
 early_stopping:
   early_stopping_patience: 20
