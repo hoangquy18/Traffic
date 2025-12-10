@@ -1,6 +1,6 @@
 paths:
   csv_path: traffic_weather_2025_converted.csv
-  output_dir: experiments/run01
+  output_dir: experiments/informer_optimized_run01
 
 data:
   numerical_features:
@@ -29,41 +29,53 @@ data:
     - street_type
     - street_level
   prediction_horizons: [3]
-  sequence_length: 3
+  sequence_length: 96
   train_ratio: 0.7
   val_ratio: 0.15
   resample_rule: 1h
 
 model:
-  rnn_type: lstm
   hidden_dim: 256
-  num_layers: 2
-  dropout: 0.3
-  bidirectional: true
-  time_embedding_dim: 32  # set to integer (e.g. 8) to enable hour-of-day embeddings
-  segment_embedding_dim: 32  # set to integer (e.g. 16) to enable segment embeddings
+  dropout: 0.1
+  time_embedding_dim: 32
+  segment_embedding_dim: 64
+
+informer:
+  seq_len: 96
+  label_len: 48
+  out_len: 24
+  factor: 5
+  d_ff: 1024
+  n_heads: 8
+  e_layers: 3
+  d_layers: 2
+  attn: prob
+  activation: gelu
+  distil: true
 
 optimization:
-  batch_size: 128
-  learning_rate: 0.001
+  batch_size: 4  # Optimized for 10GB VRAM
+  learning_rate: 0.0001
   weight_decay: 0.0001
   gradient_clip_norm: 1.0
 
 training:
-  epochs: 40
-  num_workers: 4
+  epochs: 50
+  num_workers: 4  # ⬆️ TĂNG từ 2 lên 4 (data loading nhanh hơn)
   device: cuda
+  scheduler_type: plateau
 
 logging:
   wandb_project: traffic-weather
   wandb_entity: daotuan
-  wandb_run_name: gru-hourly
+  wandb_run_name: informer-optimized-hourly
   wandb_mode: online
 
 early_stopping:
-  early_stopping_patience: 5
+  early_stopping_patience: 10
   early_stopping_delta: 0.0
 
 checkpoint:
-  checkpoint_every: 1
+  checkpoint_every: 5
   save_optimizer_state: true
+

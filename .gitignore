@@ -8,6 +8,18 @@ __pycache__/**
 **/*.pyzw
 **/*.pyzwz
 
+wandb/**
+
+*.zip
+*.gz
+*.bz2
+*.xz
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+
+
 experiments/**
 traffic_weather_data/**
 data.csv

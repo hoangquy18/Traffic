@@ -310,10 +310,17 @@ def load_graph_dataset(
 
     # Add scaled features back to dataframe
     df = df.reset_index(drop=True)
-    for i, col in enumerate(feature_names):
-        df[f"feat_{col}"] = features_scaled[:, i]
-
+    
+    # Create feature columns DataFrame at once to avoid fragmentation
     feat_cols = [f"feat_{col}" for col in feature_names]
+    features_df = pd.DataFrame(
+        features_scaled,
+        columns=feat_cols,
+        index=df.index
+    )
+    
+    # Concatenate instead of inserting columns one by one
+    df = pd.concat([df, features_df], axis=1)
 
     # Resample to regular time intervals per segment
     if resample_rule:
@@ -324,10 +331,13 @@ def load_graph_dataset(
             resampled["los_idx"] = resampled["los_idx"].ffill().bfill()
             # Fill NaN in feature columns as well
             resampled[feat_cols] = resampled[feat_cols].ffill().bfill().fillna(0)
-            resampled["segment_id"] = seg_id
             resampled = resampled.dropna(subset=["los_idx"])
             resampled["los_idx"] = resampled["los_idx"].round().astype(int)
-            resampled_dfs.append(resampled.reset_index())
+            
+            # Add segment_id after reset_index to avoid fragmentation
+            resampled_reset = resampled.reset_index()
+            resampled_reset["segment_id"] = seg_id
+            resampled_dfs.append(resampled_reset)
         df = pd.concat(resampled_dfs, ignore_index=True)
         df = df.rename(columns={"index": "datetime_traffic"})
 
