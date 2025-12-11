@@ -81,7 +81,11 @@ def create_temporal_features(df: pd.DataFrame) -> pd.DataFrame:
     # Rush hour indicators
     df["is_rush_morning"] = ((df["hour"] >= 7) & (df["hour"] < 9)).astype(float)
     df["is_rush_evening"] = ((df["hour"] >= 17) & (df["hour"] < 19)).astype(float)
-    df["is_rush_hour"] = (df["is_rush_morning"] | df["is_rush_evening"]).astype(float)
+    # Use logical OR on boolean, then convert to float
+    df["is_rush_hour"] = ((df["hour"] >= 6) & (df["hour"] <= 9)) | (
+        (df["hour"] >= 16) & (df["hour"] <= 20)
+    )
+    df["is_rush_hour"] = df["is_rush_hour"].astype(float)
 
     # Day of month (useful for single-month patterns, e.g., beginning/end of month)
     df["is_first_week"] = (df["day_of_month"] <= 7).astype(float)
@@ -222,7 +226,7 @@ def create_rolling_features(
         df[f"{col}_lag_1h"] = (
             df.groupby(group_col)[col]
             .shift(1)
-            .fillna(method="bfill")
+            .bfill()  # Use bfill() instead of deprecated fillna(method="bfill")
             .reset_index(0, drop=True)
         )
 

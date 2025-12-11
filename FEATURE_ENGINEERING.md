@@ -94,12 +94,12 @@ For each of: `current_speed`, `speed_ratio`, `temperature_2m`, `rain`, `wind_spe
 
 ```bash
 # RECOMMENDED: With rolling features (slower but much better for single-month data)
-python3 engineer_features.py \
+python3 -m traffic_trainer.utils.feature_engineering \
   --input-path traffic_weather_2025_converted.csv \
   --output-path traffic_weather_2025_engineered.csv
 
 # Faster option (without rolling features - less recommended for single-month data)
-python3 engineer_features.py \
+python3 -m traffic_trainer.utils.feature_engineering \
   --input-path traffic_weather_2025_converted.csv \
   --output-path traffic_weather_2025_engineered.csv \
   --no-rolling
