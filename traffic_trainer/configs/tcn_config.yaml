@@ -1,6 +1,6 @@
 paths:
   csv_path: traffic_weather_2025_converted.csv
-  output_dir: experiments/run01
+  output_dir: experiments/tcn_run01
 
 data:
   numerical_features:
@@ -28,42 +28,50 @@ data:
     - period
     - street_type
     - street_level
-  prediction_horizons: [1,2,3]
-  sequence_length: 8
+  prediction_horizons: [3]
+  sequence_length: 12  # 12 time steps (e.g., 1 hour with 5-min intervals)
   train_ratio: 0.7
   val_ratio: 0.15
   resample_rule: 1h
 
 model:
-  rnn_type: lstm
-  hidden_dim: 256
-  num_layers: 2
-  dropout: 0.3
-  bidirectional: true
-  time_embedding_dim: 32  # set to integer (e.g. 8) to enable hour-of-day embeddings
-  segment_embedding_dim: 32  # set to integer (e.g. 16) to enable segment embeddings
+  hidden_dim: 128
+  dropout: 0.2
+  time_embedding_dim: 16  # Hour-of-day embedding
+  segment_embedding_dim: 32  # Road segment embedding
+
+tcn:
+  model_type: standard  # "standard" or "multiscale"
+  num_channels: [128, 128, 256, 256]  # Channel progression for standard TCN
+  kernel_size: 3
+  # scales: [3, 5, 7]  # For multiscale TCN (uncomment if using multiscale)
+  use_temporal_attention: true
+  use_spatial_attention: false  # Set to true to enable spatial attention
+  num_attention_heads: 4
 
 optimization:
-  batch_size: 128
+  batch_size: 32
   learning_rate: 0.001
   weight_decay: 0.0001
   gradient_clip_norm: 1.0
 
 training:
-  epochs: 40
+  epochs: 50
   num_workers: 4
   device: cuda
+  scheduler_type: plateau  # "plateau" or "cosine"
 
 logging:
   wandb_project: traffic-weather
   wandb_entity: daotuan
-  wandb_run_name: gru-hourly
-  wandb_mode: disabled
+  wandb_run_name: tcn-hourly
+  wandb_mode: online  # "online", "offline", or "disabled"
 
 early_stopping:
-  early_stopping_patience: 5
+  early_stopping_patience: 10
   early_stopping_delta: 0.0
 
 checkpoint:
-  checkpoint_every: 1
+  checkpoint_every: 5
   save_optimizer_state: true
+

@@ -11,6 +11,8 @@ from traffic_trainer.trainers.gman_trainer import (
     FocalLoss,
     OrdinalFocalLoss,
 )
+from traffic_trainer.trainers.tcn_trainer import TCNTrainer, TCNTrainingConfig
+from traffic_trainer.trainers.informer_trainer import InformerTrainer, InformerTrainingConfig
 
 __all__ = [
     # Base
@@ -32,4 +34,10 @@ __all__ = [
     "LabelSmoothingCrossEntropy",
     "FocalLoss",
     "OrdinalFocalLoss",
+    # TCN
+    "TCNTrainer",
+    "TCNTrainingConfig",
+    # Informer
+    "InformerTrainer",
+    "InformerTrainingConfig",
 ]
