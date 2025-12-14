@@ -13,6 +13,11 @@ from traffic_trainer.trainers.gman_trainer import (
 )
 from traffic_trainer.trainers.tcn_trainer import TCNTrainer, TCNTrainingConfig
 from traffic_trainer.trainers.informer_trainer import InformerTrainer, InformerTrainingConfig
+from traffic_trainer.trainers.timesnet_trainer import TimesNetTrainer, TimesNetTrainingConfig
+from traffic_trainer.trainers.timesnet_plus_plus_trainer import (
+    TimesNetPlusPlusTrainer,
+    TimesNetPlusPlusTrainingConfig,
+)
 
 __all__ = [
     # Base
@@ -40,4 +45,10 @@ __all__ = [
     # Informer
     "InformerTrainer",
     "InformerTrainingConfig",
+    # TimesNet
+    "TimesNetTrainer",
+    "TimesNetTrainingConfig",
+    # TimesNet++
+    "TimesNetPlusPlusTrainer",
+    "TimesNetPlusPlusTrainingConfig",
 ]
