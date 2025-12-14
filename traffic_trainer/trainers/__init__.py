@@ -27,6 +27,17 @@ from traffic_trainer.trainers.timesnet_plus_plus_trainer import (
     TimesNetPlusPlusTrainer,
     TimesNetPlusPlusTrainingConfig,
 )
+from traffic_trainer.trainers.ml_base import MLBaseConfig, MLBaseTrainer
+from traffic_trainer.trainers.xgboost_trainer import (
+    XGBoostTrainer,
+    XGBoostTrainingConfig,
+)
+from traffic_trainer.trainers.decision_tree_trainer import (
+    DecisionTreeTrainer,
+    DecisionTreeTrainingConfig,
+)
+from traffic_trainer.trainers.arima_trainer import ARIMATrainer, ARIMATrainingConfig
+from traffic_trainer.trainers.sarima_trainer import SARIMATrainer, SARIMATrainingConfig
 
 __all__ = [
     # Base
@@ -60,4 +71,19 @@ __all__ = [
     # TimesNet++
     "TimesNetPlusPlusTrainer",
     "TimesNetPlusPlusTrainingConfig",
+    # ML Base
+    "MLBaseConfig",
+    "MLBaseTrainer",
+    # XGBoost
+    "XGBoostTrainer",
+    "XGBoostTrainingConfig",
+    # Decision Tree
+    "DecisionTreeTrainer",
+    "DecisionTreeTrainingConfig",
+    # ARIMA
+    "ARIMATrainer",
+    "ARIMATrainingConfig",
+    # SARIMA
+    "SARIMATrainer",
+    "SARIMATrainingConfig",
 ]
