@@ -1,0 +1,80 @@
+# Configuration for TimesNet
+# TimesNet uses 2D FFT to convert 1D time series into 2D representations
+# enabling capture of both intraperiod and interperiod variations
+
+paths:
+  csv_path: traffic_weather_2025_converted.csv
+  output_dir: experiments/run_timesnet_01
+
+data:
+  numerical_features:
+    - length
+    - max_velocity
+    - current_speed
+    - free_flow_speed
+    - temperature_2m
+    - dew_point_2m
+    - relative_humidity_2m
+    - wind_speed_10m
+    - wind_direction_10m
+    - wind_gusts_10m
+    - rain
+    - apparent_temperature
+    - pressure_msl
+    - surface_pressure
+    - sunshine_duration
+    - soil_temperature_0_to_7cm
+    - soil_moisture_0_to_7cm
+    - cloud_cover
+    - cloud_cover_low
+    - cloud_cover_mid
+    - cloud_cover_high
+  categorical_features:
+    - weekday
+    - period
+    - street_type
+    - street_level
+  prediction_horizons: [1,2,3]
+  sequence_length: 8
+  train_ratio: 0.7
+  val_ratio: 0.15
+  resample_rule: 1h
+
+model:
+  hidden_dim: 128
+  dropout: 0.3
+
+# TimesNet-specific settings
+timesnet:
+  seq_len: 8          # Should match sequence_length
+  pred_len: 3        # Should match max prediction_horizons
+  e_layers: 2        # Number of encoder layers
+  top_k: 3          # Number of top frequencies to keep
+  d_ff: 128        # Feed-forward dimension
+  num_kernels: 3    # Number of kernels in Inception block
+
+optimization:
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  gradient_clip_norm: 1.0
+
+training:
+  epochs: 50
+  num_workers: 0
+  device: cuda
+
+logging:
+  wandb_project: traffic-timesnet
+  wandb_entity: null
+  wandb_run_name: timesnet-v1
+  wandb_mode: disabled
+
+early_stopping:
+  early_stopping_patience: 10
+  early_stopping_delta: 0.0
+
+checkpoint:
+  checkpoint_every: 5
+  save_optimizer_state: true
+

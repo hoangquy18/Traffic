@@ -36,6 +36,21 @@ from traffic_trainer.models.informer import (
     ProbAttention,
     create_informer_model,
 )
+from traffic_trainer.models.timesnet import (
+    FFT2D,
+    InceptionBlock,
+    TimesBlock,
+    TimesNet,
+    create_timesnet_model,
+)
+from traffic_trainer.models.timesnet_plus_plus import (
+    AdaptiveFFT2D,
+    EnhancedInceptionBlock,
+    CrossScaleFusion,
+    TimesBlockPlusPlus,
+    TimesNetPlusPlus,
+    create_timesnet_plus_plus_model,
+)
 
 __all__ = [
     # RNN
@@ -71,6 +86,17 @@ __all__ = [
     "Informer",
     "ProbAttention",
     "create_informer_model",
+    # TimesNet
+    "FFT2D",
+    "InceptionBlock",
+    "TimesBlock",
+    "TimesNet",
+    "create_timesnet_model",
+    # TimesNet++
+    "AdaptiveFFT2D",
+    "EnhancedInceptionBlock",
+    "CrossScaleFusion",
+    "TimesBlockPlusPlus",
+    "TimesNetPlusPlus",
+    "create_timesnet_plus_plus_model",
 ]
-
-
