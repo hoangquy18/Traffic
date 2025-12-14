@@ -9,13 +9,17 @@ import numpy as np
 import yaml
 from sklearn.tree import DecisionTreeClassifier
 
-from traffic_trainer.trainers.ml_base import MLBaseConfig, MLBaseTrainer, load_yaml_config
+from traffic_trainer.trainers.ml_base import (
+    MLBaseConfig,
+    MLBaseTrainer,
+    load_yaml_config,
+)
 
 
 @dataclass
 class DecisionTreeTrainingConfig(MLBaseConfig):
     """Configuration for Decision Tree training."""
-    
+
     # Decision Tree parameters
     max_depth: int = None
     min_samples_split: int = 2
@@ -27,11 +31,11 @@ class DecisionTreeTrainingConfig(MLBaseConfig):
 def load_config(config_path: Path) -> DecisionTreeTrainingConfig:
     """Load configuration from YAML file."""
     cfg = load_yaml_config(config_path)
-    
+
     paths = cfg.get("paths", {})
     data = cfg.get("data", {})
     dt_cfg = cfg.get("decision_tree", {})
-    
+
     return DecisionTreeTrainingConfig(
         csv_path=Path(paths.get("csv_path", "data.csv")),
         output_dir=Path(paths.get("output_dir", "experiments/decision_tree_run01")),
@@ -53,9 +57,9 @@ def load_config(config_path: Path) -> DecisionTreeTrainingConfig:
 
 class DecisionTreeTrainer(MLBaseTrainer):
     """Trainer for Decision Tree model."""
-    
+
     config: DecisionTreeTrainingConfig
-    
+
     def _create_model(self, horizon: int) -> DecisionTreeClassifier:
         """Create Decision Tree model for a specific horizon."""
         return DecisionTreeClassifier(
@@ -66,26 +70,30 @@ class DecisionTreeTrainer(MLBaseTrainer):
             criterion=self.config.criterion,
             random_state=self.config.random_state,
         )
-    
-    def _train_model(self, model: DecisionTreeClassifier, X: np.ndarray, y: np.ndarray) -> None:
+
+    def _train_model(
+        self, model: DecisionTreeClassifier, X: np.ndarray, y: np.ndarray
+    ) -> None:
         """Train Decision Tree model."""
         # Filter out invalid samples (target < 0)
         valid_mask = y >= 0
         X_valid = X[valid_mask]
         y_valid = y[valid_mask]
-        
+
         model.fit(X_valid, y_valid)
-    
+
     def _predict(self, model: DecisionTreeClassifier, X: np.ndarray) -> np.ndarray:
         """Make predictions."""
         return model.predict(X)
-    
+
     def _get_model_type(self) -> str:
         return "DecisionTree"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train Decision Tree for traffic prediction")
+    parser = argparse.ArgumentParser(
+        description="Train Decision Tree for traffic prediction"
+    )
     parser.add_argument(
         "--config",
         type=Path,
@@ -104,4 +112,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
