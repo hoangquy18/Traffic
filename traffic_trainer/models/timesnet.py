@@ -179,9 +179,23 @@ class TimesBlock(nn.Module):
         # Get period from the shape
         _, top_k, period, _ = x_2d.shape
 
-        # Reshape to original: [batch, seq_len, d_model]
+        # Reshape to 1D: [batch, top_k * period, d_model]
         x_2d = x_2d.contiguous().view(batch_size, self.top_k * period, d_model)
-        x_2d = x_2d[:, :seq_len, :]  # Truncate to original length
+
+        # Pad or truncate to match original sequence length
+        if x_2d.shape[1] < seq_len:
+            # Pad with zeros to match seq_len
+            padding = torch.zeros(
+                batch_size,
+                seq_len - x_2d.shape[1],
+                d_model,
+                device=x.device,
+                dtype=x.dtype,
+            )
+            x_2d = torch.cat([x_2d, padding], dim=1)
+        elif x_2d.shape[1] > seq_len:
+            # Truncate to match seq_len
+            x_2d = x_2d[:, :seq_len, :]
 
         # Residual connection and normalization
         x = x + self.dropout(x_2d)

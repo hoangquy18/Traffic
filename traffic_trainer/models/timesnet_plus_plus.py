@@ -246,7 +246,13 @@ class TimesBlockPlusPlus(nn.Module):
             
             # Pad or truncate to original length
             if x_2d.shape[1] < seq_len:
-                padding = torch.zeros(batch_size, seq_len - x_2d.shape[1], d_model, device=x.device)
+                padding = torch.zeros(
+                    batch_size, 
+                    seq_len - x_2d.shape[1], 
+                    d_model, 
+                    device=x.device, 
+                    dtype=x.dtype
+                )
                 x_2d = torch.cat([x_2d, padding], dim=1)
             else:
                 x_2d = x_2d[:, :seq_len, :]

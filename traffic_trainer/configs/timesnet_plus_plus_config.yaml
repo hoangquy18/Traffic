@@ -49,7 +49,7 @@ timesnet_plus_plus:
   pred_len: 3        # Should match max prediction_horizons
   e_layers: 2        # Number of encoder layers
   top_k: 5          # Number of top frequencies to keep
-  d_ff: 2048        # Feed-forward dimension
+  d_ff: 128        # Feed-forward dimension
   num_kernels: 6    # Number of kernels in Inception block
   num_periods: 3    # Number of different periods for multi-scale analysis
 
