@@ -1,0 +1,45 @@
+# Configuration for ARIMA
+
+paths:
+  csv_path: traffic_weather_2025_converted.csv
+  output_dir: experiments/run_arima_01
+
+data:
+  numerical_features:
+    - length
+    - max_velocity
+    - current_speed
+    - free_flow_speed
+    - temperature_2m
+    - dew_point_2m
+    - relative_humidity_2m
+    - wind_speed_10m
+    - wind_direction_10m
+    - wind_gusts_10m
+    - rain
+    - apparent_temperature
+    - pressure_msl
+    - surface_pressure
+    - sunshine_duration
+    - soil_temperature_0_to_7cm
+    - soil_moisture_0_to_7cm
+    - cloud_cover
+    - cloud_cover_low
+    - cloud_cover_mid
+    - cloud_cover_high
+  categorical_features:
+    - weekday
+    - period
+    - street_type
+    - street_level
+  prediction_horizons: [1,2,3]
+  sequence_length: 8
+  train_ratio: 0.7
+  val_ratio: 0.15
+  resample_rule: 1h
+
+# ARIMA-specific settings
+arima:
+  order: [1, 1, 1]  # (p, d, q)
+  max_iter: 50
+
