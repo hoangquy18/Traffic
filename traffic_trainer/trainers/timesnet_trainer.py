@@ -16,7 +16,7 @@ from traffic_trainer.trainers.base import BaseConfig, BaseTrainer, load_yaml_con
 @dataclass
 class TimesNetTrainingConfig(BaseConfig):
     """Configuration for TimesNet training."""
-    
+
     # Model - TimesNet specific
     seq_len: int = 96
     pred_len: int = 24
@@ -29,7 +29,7 @@ class TimesNetTrainingConfig(BaseConfig):
 def load_config(config_path: Path) -> TimesNetTrainingConfig:
     """Load configuration from YAML file."""
     cfg = load_yaml_config(config_path)
-    
+
     paths = cfg.get("paths", {})
     data = cfg.get("data", {})
     model = cfg.get("model", {})
@@ -39,7 +39,7 @@ def load_config(config_path: Path) -> TimesNetTrainingConfig:
     logging_cfg = cfg.get("logging", {})
     early_stop = cfg.get("early_stopping", {})
     checkpoint = cfg.get("checkpoint", {})
-    
+
     return TimesNetTrainingConfig(
         csv_path=Path(paths.get("csv_path", "data.csv")),
         output_dir=Path(paths.get("output_dir", "experiments/timesnet_run01")),
@@ -78,13 +78,13 @@ def load_config(config_path: Path) -> TimesNetTrainingConfig:
 
 class TimesNetTrainer(BaseTrainer):
     """Trainer for TimesNet model."""
-    
+
     config: TimesNetTrainingConfig
-    
+
     def _load_data(self) -> None:
         """Load dataset for TimesNet."""
         print(f"Loading dataset for TimesNet from {self.config.csv_path}...")
-        
+
         (
             self.train_dataset,
             self.val_dataset,
@@ -108,13 +108,13 @@ class TimesNetTrainer(BaseTrainer):
             use_time_embedding=False,
             use_segment_embedding=False,
         )
-        
+
         self.num_segments = self.road_graph.num_nodes
-    
+
     def _get_collate_fn(self):
         """Return graph collate function."""
         return collate_graph_batch
-    
+
     def _create_model(self) -> nn.Module:
         """Create TimesNet model."""
         return create_timesnet_model(
@@ -130,34 +130,38 @@ class TimesNetTrainer(BaseTrainer):
             num_kernels=self.config.num_kernels,
             dropout=self.config.dropout,
         )
-    
-    def _forward_batch(self, batch: Dict) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
+    def _forward_batch(
+        self, batch: Dict
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Run forward pass on a batch."""
         node_features = batch["node_features"].to(self.device)
         targets = batch["targets"].to(self.device)
         mask = batch["mask"].to(self.device)
-        
+
         logits = self.model(
             node_features,
             mask=mask,
         )
-        
+
         return logits, targets, mask
-    
+
     def _get_model_type(self) -> str:
         return "TimesNet"
-    
+
     def _get_wandb_config(self) -> Dict[str, Any]:
         """Add TimesNet-specific info to W&B config."""
         config = super()._get_wandb_config()
-        config.update({
-            "num_segments": self.num_segments,
-            "e_layers": self.config.e_layers,
-            "top_k": self.config.top_k,
-            "num_kernels": self.config.num_kernels,
-        })
+        config.update(
+            {
+                "num_segments": self.num_segments,
+                "e_layers": self.config.e_layers,
+                "top_k": self.config.top_k,
+                "num_kernels": self.config.num_kernels,
+            }
+        )
         return config
-    
+
     def _print_model_info(self) -> None:
         """Print model info including segment count."""
         super()._print_model_info()
@@ -165,7 +169,9 @@ class TimesNetTrainer(BaseTrainer):
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train TimesNet for traffic prediction")
+    parser = argparse.ArgumentParser(
+        description="Train TimesNet for traffic prediction"
+    )
     parser.add_argument(
         "--config",
         type=Path,
@@ -184,4 +190,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
