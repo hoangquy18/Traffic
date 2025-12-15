@@ -50,6 +50,20 @@ from traffic_trainer.models.dlinear import (
 from traffic_trainer.models.patchtst import (
     PatchTST,
     create_patchtst_model,
+from traffic_trainer.models.timesnet import (
+    FFT2D,
+    InceptionBlock,
+    TimesBlock,
+    TimesNet,
+    create_timesnet_model,
+)
+from traffic_trainer.models.timesnet_plus_plus import (
+    AdaptiveFFT2D,
+    EnhancedInceptionBlock,
+    CrossScaleFusion,
+    TimesBlockPlusPlus,
+    TimesNetPlusPlus,
+    create_timesnet_plus_plus_model,
 )
 
 __all__ = [
@@ -98,6 +112,17 @@ __all__ = [
     # PatchTST
     "PatchTST",
     "create_patchtst_model",
+    # TimesNet
+    "FFT2D",
+    "InceptionBlock",
+    "TimesBlock",
+    "TimesNet",
+    "create_timesnet_model",
+    # TimesNet++
+    "AdaptiveFFT2D",
+    "EnhancedInceptionBlock",
+    "CrossScaleFusion",
+    "TimesBlockPlusPlus",
+    "TimesNetPlusPlus",
+    "create_timesnet_plus_plus_model",
 ]
-
-

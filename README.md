@@ -11,6 +11,14 @@ Sequence modelling pipeline for predicting traffic Level of Service (LOS) catego
   - **Spatio-Temporal GNN** (GCN/GAT) for traffic propagation modeling
   - **Spatio-Temporal Transformer** for learning segment relationships via self-attention
   - **GMAN++** (Graph Multi-Attention Network) with dilated temporal convolutions
+  - **TimesNet** - Temporal 2D-Variation Modeling using 2D FFT transformations
+  - **TimesNet++** - Enhanced TimesNet with multi-scale 2D FFT and cross-scale fusion
+  - **Informer** - Efficient Transformer for long sequence time-series forecasting
+  - **TCN** - Temporal Convolutional Network with multi-scale convolutions
+  - **XGBoost** - Gradient boosting for classification
+  - **Decision Tree** - Tree-based classifier
+  - **ARIMA** - Autoregressive Integrated Moving Average
+  - **SARIMA** - Seasonal ARIMA with seasonal components
 - Early stopping, learning-rate scheduling, checkpointing, and optional Weights & Biases logging.
 
 ### Project Layout
@@ -22,7 +30,15 @@ traffic_trainer/
 │   ├── config.yaml          # RNN model config
 │   ├── graph_config.yaml    # GNN model config
 │   ├── transformer_config.yaml
-│   └── sota_config.yaml     # GMAN config
+│   ├── sota_config.yaml     # GMAN config
+│   ├── timesnet_config.yaml
+│   ├── timesnet_plus_plus_config.yaml
+│   ├── informer_config_optimized.yaml
+│   ├── tcn_config.yaml
+│   ├── xgboost_config.yaml
+│   ├── decision_tree_config.yaml
+│   ├── arima_config.yaml
+│   └── sarima_config.yaml
 ├── data/                     # Data loading modules
 │   ├── constants.py         # LOS_LEVELS and shared constants
 │   ├── sequential.py        # Sequential data loader (for RNN)
@@ -31,12 +47,26 @@ traffic_trainer/
 │   ├── rnn.py               # SequenceClassifier (LSTM/GRU)
 │   ├── gnn.py               # SpatioTemporalGNN (GCN/GAT)
 │   ├── transformer.py       # SpatioTemporalTransformer
-│   └── gman.py              # GMAN++ model
+│   ├── gman.py              # GMAN++ model
+│   ├── timesnet.py          # TimesNet model
+│   ├── timesnet_plus_plus.py # TimesNet++ model
+│   ├── informer.py          # Informer model
+│   └── tcn.py               # Temporal Convolutional Network
 ├── trainers/                 # Training scripts
+│   ├── base.py              # Base trainer for deep learning models
+│   ├── ml_base.py           # Base trainer for traditional ML models
 │   ├── rnn_trainer.py       # RNN trainer
 │   ├── gnn_trainer.py       # GNN trainer
 │   ├── transformer_trainer.py
-│   └── gman_trainer.py      # GMAN trainer
+│   ├── gman_trainer.py      # GMAN trainer
+│   ├── timesnet_trainer.py  # TimesNet trainer
+│   ├── timesnet_plus_plus_trainer.py # TimesNet++ trainer
+│   ├── informer_trainer.py  # Informer trainer
+│   ├── tcn_trainer.py       # TCN trainer
+│   ├── xgboost_trainer.py   # XGBoost trainer
+│   ├── decision_tree_trainer.py # Decision Tree trainer
+│   ├── arima_trainer.py     # ARIMA trainer
+│   └── sarima_trainer.py    # SARIMA trainer
 └── utils/                    # Utilities
     ├── feature_importance.py
     └── preprocessing.py     # Data preprocessing utilities
@@ -56,6 +86,7 @@ Additional directories:
 - PyYAML
 - joblib
 - Optional: `wandb` for experiment tracking
+- For ML models: `xgboost`, `statsmodels`
 
 Install dependencies manually, for example:
 
@@ -63,7 +94,7 @@ Install dependencies manually, for example:
 conda create -n traffic python=3.10
 conda activate traffic
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118  # pick the wheel that matches your setup
-pip install pandas numpy scikit-learn pyyaml tqdm wandb joblib
+pip install pandas numpy scikit-learn pyyaml tqdm wandb joblib xgboost statsmodels
 ```
 
 ### Dataset Expectations & Preparation
@@ -92,7 +123,8 @@ Raw data dumps from TomTom API (stored in `traffic_weather_data/`) need to be co
 ```bash
 python -m traffic_trainer.utils.preprocessing \
   --input-dir traffic_weather_data \
-  --output-path traffic_weather_2025_converted.csv
+  --output-path traffic_weather_2025_converted.csv \
+  --segments-output-path segment_to_coors.csv
 ```
 
 **What the script does:**
@@ -198,6 +230,144 @@ python -m traffic_trainer.trainers.gman_trainer --config traffic_trainer/configs
 - `gman.use_temporal_conv`: Enable dilated temporal convolutions
 - `use_ordinal_loss`: Penalize predictions based on ordinal distance
 
+#### 5. TimesNet
+
+Best for: Capturing both intraperiod and interperiod variations using 2D FFT transformations.
+
+```bash
+python -m traffic_trainer.trainers.timesnet_trainer --config traffic_trainer/configs/timesnet_config.yaml
+```
+
+**Key features:**
+- 2D FFT transformation converts 1D time series to 2D representation
+- Inception-like blocks for multi-scale feature extraction
+- Captures temporal variations at different periods
+
+**Config options:**
+- `timesnet.top_k`: Number of top frequencies to keep
+- `timesnet.e_layers`: Number of encoder layers
+- `timesnet.num_kernels`: Number of kernels in Inception block
+- `timesnet.d_ff`: Feed-forward dimension
+
+#### 6. TimesNet++
+
+Best for: Enhanced temporal modeling with multi-scale analysis and cross-scale fusion.
+
+```bash
+python -m traffic_trainer.trainers.timesnet_plus_plus_trainer --config traffic_trainer/configs/timesnet_plus_plus_config.yaml
+```
+
+**Enhanced features:**
+- Multi-scale 2D FFT with multiple period detection
+- Enhanced Inception blocks with channel attention
+- Cross-scale feature fusion for better integration
+- Adaptive period selection
+
+**Config options:**
+- `timesnet_plus_plus.top_k`: Number of top frequencies
+- `timesnet_plus_plus.num_periods`: Number of different periods for multi-scale analysis
+- `timesnet_plus_plus.e_layers`: Number of encoder layers
+
+#### 7. Informer
+
+Best for: Efficient long sequence time-series forecasting with ProbSparse attention.
+
+```bash
+python -m traffic_trainer.trainers.informer_trainer --config traffic_trainer/configs/informer_config_optimized.yaml
+```
+
+**Key features:**
+- ProbSparse Self-Attention (O(L log L) complexity)
+- Self-Attention Distilling for dimension reduction
+- Generative style decoder for long sequence prediction
+
+#### 8. TCN (Temporal Convolutional Network)
+
+Best for: Multi-scale temporal pattern recognition with causal convolutions.
+
+```bash
+python -m traffic_trainer.trainers.tcn_trainer --config traffic_trainer/configs/tcn_config.yaml
+```
+
+**Key features:**
+- Causal convolutions for temporal modeling
+- Multi-scale temporal blocks
+- Dilated convolutions for capturing long-range dependencies
+
+#### 9. XGBoost
+
+Best for: Fast, interpretable gradient boosting with good baseline performance.
+
+```bash
+python -m traffic_trainer.trainers.xgboost_trainer --config traffic_trainer/configs/xgboost_config.yaml
+```
+
+**Key features:**
+- Gradient boosting for classification
+- Uses current time step features to predict future horizons
+- One model per prediction horizon
+- Fast training and inference
+
+**Config options:**
+- `xgboost.n_estimators`: Number of boosting rounds
+- `xgboost.max_depth`: Maximum tree depth
+- `xgboost.learning_rate`: Learning rate
+- `xgboost.subsample`: Row subsampling ratio
+
+#### 10. Decision Tree
+
+Best for: Simple, interpretable baseline model.
+
+```bash
+python -m traffic_trainer.trainers.decision_tree_trainer --config traffic_trainer/configs/decision_tree_config.yaml
+```
+
+**Key features:**
+- Simple tree-based classifier
+- Fast training and inference
+- Interpretable decision rules
+- One model per prediction horizon
+
+**Config options:**
+- `decision_tree.max_depth`: Maximum tree depth (null for unlimited)
+- `decision_tree.min_samples_split`: Minimum samples to split
+- `decision_tree.criterion`: Split criterion ("gini" or "entropy")
+
+#### 11. ARIMA
+
+Best for: Univariate time series forecasting with autoregressive components.
+
+```bash
+python -m traffic_trainer.trainers.arima_trainer --config traffic_trainer/configs/arima_config.yaml
+```
+
+**Key features:**
+- Autoregressive Integrated Moving Average model
+- Works with aggregated time series across segments
+- Suitable for univariate forecasting
+
+**Config options:**
+- `arima.order`: ARIMA order (p, d, q)
+- `arima.max_iter`: Maximum iterations for model fitting
+
+#### 12. SARIMA
+
+Best for: Time series with seasonal patterns (e.g., hourly traffic data).
+
+```bash
+python -m traffic_trainer.trainers.sarima_trainer --config traffic_trainer/configs/sarima_config.yaml
+```
+
+**Key features:**
+- Seasonal ARIMA with seasonal components
+- Captures daily/hourly patterns
+- Default seasonal period of 24 for hourly data
+
+**Config options:**
+- `sarima.order`: ARIMA order (p, d, q)
+- `sarima.seasonal_order`: Seasonal order (P, D, Q, s) where s is the seasonal period
+- `sarima.max_iter`: Maximum iterations for model fitting
+
 ---
 
 ### Training Output
@@ -206,11 +376,12 @@ Inside `paths.output_dir` you will find:
 
 | File | Description |
 |------|-------------|
-| `best_model.pt` | Best validation weights (optimizer state optional) |
-| `checkpoint_epoch*.pt` | Periodic checkpoints |
-| `metrics.json` / `test_results.json` | Test metrics and classification report |
+| `best_model.pt` | Best validation weights for deep learning models (optimizer state optional) |
+| `checkpoint_epoch*.pt` | Periodic checkpoints for deep learning models |
+| `model_h*.joblib` | Trained models for ML models (one per horizon) |
+| `test_results.json` | Test metrics and classification report |
 | `history.json` | Training history (loss, F1, accuracy per epoch) |
-| `scaler.joblib` / `scaler.pkl` | Fitted StandardScaler for inference |
+| `scaler.joblib` | Fitted StandardScaler for inference |
 | `feature_names.json` | Ordered feature list |
 | `metadata.json` | Segment mappings and graph info |
 | `confusion_matrix_*.png` | Confusion matrices (RNN trainer) |
@@ -240,5 +411,13 @@ python -m traffic_trainer.utils.feature_importance \
 | **GNN** | Connected road network | Models traffic propagation | Requires topology data |
 | **Transformer** | Any multi-segment data | Learns relationships automatically | More parameters |
 | **GMAN++** | Production/SOTA | Best accuracy, multi-horizon | Slowest training |
+| **TimesNet** | Temporal patterns | Captures intra/interperiod variations | Requires tuning top_k |
+| **TimesNet++** | Enhanced temporal | Multi-scale analysis | More complex |
+| **Informer** | Long sequences | Efficient attention | Less interpretable |
+| **TCN** | Multi-scale patterns | Causal convolutions | Fixed receptive field |
+| **XGBoost** | Baseline/Interpretable | Fast, good performance | No temporal modeling |
+| **Decision Tree** | Simple baseline | Very fast, interpretable | Limited capacity |
+| **ARIMA** | Univariate TS | Classical approach | Univariate only |
+| **SARIMA** | Seasonal patterns | Captures seasonality | Requires long sequences |
 
 ---

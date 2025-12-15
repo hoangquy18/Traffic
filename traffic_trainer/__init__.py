@@ -10,11 +10,15 @@ Modules:
 - trainers: Training scripts for each model type
 - configs: Configuration files
 - utils: Utility functions
+- api: REST API for model inference (FastAPI)
 
 Example usage:
     from traffic_trainer.data import load_dataset, LOS_LEVELS
     from traffic_trainer.models import create_model
     from traffic_trainer.trainers import RNNTrainer, TrainingConfig
+
+    # For API:
+    # python -m traffic_trainer.api.run_server
 """
 
 # Re-export commonly used classes and functions

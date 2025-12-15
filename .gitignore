@@ -30,3 +30,7 @@ data.csv.tar
 data.csv.tar.gz
 data.csv.tar.bz2
 data.csv.tar.xz
+*.csv
+*.ipynb
+*.zip
+___MACOSX/

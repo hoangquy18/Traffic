@@ -1,0 +1,13 @@
+# API dependencies for traffic prediction service
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+python-multipart>=0.0.6
+requests>=2.31.0  # For API client
+
+# Core ML dependencies (already in project)
+torch>=2.0.0
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+PyYAML>=6.0

@@ -4,7 +4,7 @@
 
 paths:
   csv_path: traffic_weather_2025_converted.csv
-  output_dir: experiments/run01
+  output_dir: experiments/run_transformer_01
 
 data:
   numerical_features:
@@ -34,7 +34,7 @@ data:
     - period
     - street_type
     - street_level
-  prediction_horizons: [3]  # Can add [1, 2, 3, 4] for multi-horizon
+  prediction_horizons: [1,2,3]  # Can add [1, 2, 3, 4] for multi-horizon
   sequence_length: 8
   train_ratio: 0.7
   val_ratio: 0.15
@@ -71,7 +71,7 @@ logging:
   wandb_project: traffic-transformer
   wandb_entity: null
   wandb_run_name: transformer-v1
-  wandb_mode: online    # "online", "offline", or "disabled"
+  wandb_mode: disabled    # "online", "offline", or "disabled"
 
 early_stopping:
   early_stopping_patience: 10
