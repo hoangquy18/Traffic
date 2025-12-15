@@ -167,7 +167,13 @@ OUTPUT_COLUMNS: List[str] = [
 ]
 
 
-def process_file(path: Path) -> pd.DataFrame:
+SEGMENT_COORD_COLUMNS: List[str] = [
+    "segment_id",
+    "coordinates",
+]
+
+
+def process_file(path: Path) -> Tuple[pd.DataFrame, pd.DataFrame]:
     df = pd.read_csv(path)
     for col in NUMERIC_COLUMNS:
         if col in df.columns:
@@ -199,6 +205,17 @@ def process_file(path: Path) -> pd.DataFrame:
     df["LOS"] = df.apply(infer_los, axis=1)
     df = df[df["LOS"].notna()].copy()
 
+    # build per-segment coordinate mapping before restricting columns
+    segment_cols = [c for c in SEGMENT_COORD_COLUMNS if c in df.columns]
+    if segment_cols:
+        segments = (
+            df[segment_cols]
+            .dropna(subset=["segment_id"])
+            .drop_duplicates(subset=["segment_id"])
+        )
+    else:
+        segments = pd.DataFrame(columns=SEGMENT_COORD_COLUMNS)
+
     df = df.sort_values("timestamp")
     df["_id"] = np.arange(1, len(df) + 1)
 
@@ -207,7 +224,7 @@ def process_file(path: Path) -> pd.DataFrame:
             df[col] = np.nan
 
     df = df[OUTPUT_COLUMNS]
-    return df
+    return df, segments
 
 
 def parse_args() -> argparse.Namespace:
@@ -232,6 +249,12 @@ def parse_args() -> argparse.Namespace:
         default="*.csv",
         help="Glob pattern to match files in input directory.",
     )
+    parser.add_argument(
+        "--segments-output-path",
+        type=Path,
+        required=False,
+        help="Optional path for CSV mapping `segment_id` to coordinates.",
+    )
     return parser.parse_args()
 
 
@@ -241,10 +264,29 @@ def main() -> None:
     if not files:
         raise FileNotFoundError("No CSV files found with provided pattern.")
 
-    frames = [process_file(path) for path in files]
-    combined = pd.concat(frames, ignore_index=True)
+    feature_frames: List[pd.DataFrame] = []
+    segment_frames: List[pd.DataFrame] = []
+
+    for path in files:
+        features, segments = process_file(path)
+        feature_frames.append(features)
+        segment_frames.append(segments)
+
+    combined = pd.concat(feature_frames, ignore_index=True)
     combined.to_csv(args.output_path, index=False)
     print(f"Wrote {len(combined)} rows to {args.output_path}")
+
+    if args.segments_output_path is not None:
+        all_segments = (
+            pd.concat(segment_frames, ignore_index=True)
+            .drop_duplicates(subset=["segment_id"])
+            .sort_values("segment_id")
+        )
+        all_segments.to_csv(args.segments_output_path, index=False)
+        print(
+            f"Wrote {len(all_segments)} unique segment coordinates to "
+            f"{args.segments_output_path}"
+        )
 
 
 if __name__ == "__main__":

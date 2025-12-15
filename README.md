@@ -123,7 +123,8 @@ Raw data dumps from TomTom API (stored in `traffic_weather_data/`) need to be co
 ```bash
 python -m traffic_trainer.utils.preprocessing \
   --input-dir traffic_weather_data \
-  --output-path traffic_weather_2025_converted.csv
+  --output-path traffic_weather_2025_converted.csv \
+  --segments-output-path segment_to_coors.csv
 ```
 
 **What the script does:**
