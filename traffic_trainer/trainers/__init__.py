@@ -15,6 +15,10 @@ from traffic_trainer.trainers.gman_trainer import (
     OrdinalFocalLoss,
 )
 from traffic_trainer.trainers.tcn_trainer import TCNTrainer, TCNTrainingConfig
+from traffic_trainer.trainers.informer_trainer import InformerTrainer, InformerTrainingConfig
+from traffic_trainer.trainers.autoformer_trainer import AutoformerTrainer, AutoformerTrainingConfig
+from traffic_trainer.trainers.dlinear_trainer import DLinearTrainer, DLinearTrainingConfig
+from traffic_trainer.trainers.patchtst_trainer import PatchTSTTrainer, PatchTSTTrainingConfig
 from traffic_trainer.trainers.informer_trainer import (
     InformerTrainer,
     InformerTrainingConfig,
@@ -65,6 +69,15 @@ __all__ = [
     # Informer
     "InformerTrainer",
     "InformerTrainingConfig",
+    # Autoformer
+    "AutoformerTrainer",
+    "AutoformerTrainingConfig",
+    # DLinear
+    "DLinearTrainer",
+    "DLinearTrainingConfig",
+    # PatchTST
+    "PatchTSTTrainer",
+    "PatchTSTTrainingConfig",
     # TimesNet
     "TimesNetTrainer",
     "TimesNetTrainingConfig",

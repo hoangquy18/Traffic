@@ -36,6 +36,20 @@ from traffic_trainer.models.informer import (
     ProbAttention,
     create_informer_model,
 )
+from traffic_trainer.models.autoformer import (
+    Autoformer,
+    AutoCorrelation,
+    SeriesDecomposition,
+    create_autoformer_model,
+)
+from traffic_trainer.models.dlinear import (
+    DLinear,
+    NLinear,
+    create_dlinear_model,
+)
+from traffic_trainer.models.patchtst import (
+    PatchTST,
+    create_patchtst_model,
 from traffic_trainer.models.timesnet import (
     FFT2D,
     InceptionBlock,
@@ -86,6 +100,18 @@ __all__ = [
     "Informer",
     "ProbAttention",
     "create_informer_model",
+    # Autoformer
+    "Autoformer",
+    "AutoCorrelation",
+    "SeriesDecomposition",
+    "create_autoformer_model",
+    # DLinear
+    "DLinear",
+    "NLinear",
+    "create_dlinear_model",
+    # PatchTST
+    "PatchTST",
+    "create_patchtst_model",
     # TimesNet
     "FFT2D",
     "InceptionBlock",
