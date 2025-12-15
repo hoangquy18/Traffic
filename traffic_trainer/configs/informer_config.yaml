@@ -1,0 +1,81 @@
+paths:
+  csv_path: traffic_weather_2025_converted.csv
+  output_dir: experiments/informer_run01
+
+data:
+  numerical_features:
+    - length
+    - max_velocity
+    - temperature_2m
+    - dew_point_2m
+    - relative_humidity_2m
+    - wind_speed_10m
+    - wind_direction_10m
+    - wind_gusts_10m
+    - rain
+    - apparent_temperature
+    - pressure_msl
+    - surface_pressure
+    - sunshine_duration
+    - soil_temperature_0_to_7cm
+    - soil_moisture_0_to_7cm
+    - cloud_cover
+    - cloud_cover_low
+    - cloud_cover_mid
+    - cloud_cover_high
+  categorical_features:
+    - weekday
+    - period
+    - street_type
+    - street_level
+  prediction_horizons: [3]
+  sequence_length: 96  # 96 time steps (8 hours with 5-min intervals)
+  train_ratio: 0.7
+  val_ratio: 0.15
+  resample_rule: 1h
+
+model:
+  hidden_dim: 256  # d_model for Informer
+  dropout: 0.1
+  time_embedding_dim: 32  # Hour-of-day embedding
+  segment_embedding_dim: 64  # Road segment embedding
+
+informer:
+  seq_len: 96  # Input sequence length (should match data.sequence_length)
+  label_len: 48  # Start token length for decoder (typically seq_len / 2)
+  out_len: 24  # Prediction sequence length (typically seq_len / 4)
+  factor: 5  # ProbSparse attention factor (3-7, lower for longer sequences)
+  d_ff: 1024  # Feed-forward dimension (2048, 1024, 512)
+  n_heads: 8  # Number of attention heads (4, 8, 16)
+  e_layers: 3  # Number of encoder layers (2-4)
+  d_layers: 2  # Number of decoder layers (1-3)
+  attn: prob  # Attention type: "prob" (ProbSparse) or "full" (standard)
+  activation: gelu  # Activation function: "gelu" or "relu"
+  distil: true  # Use distilling in encoder (reduces memory)
+
+optimization:
+  batch_size: 4  # REDUCED from 16 to 4 to avoid OOM
+  learning_rate: 0.0001  # Lower learning rate for Informer
+  weight_decay: 0.0001
+  gradient_clip_norm: 1.0
+
+training:
+  epochs: 50
+  num_workers: 2  # REDUCED from 4 to 2
+  device: cuda
+  scheduler_type: plateau  # "plateau" or "cosine"
+
+logging:
+  wandb_project: traffic-weather
+  wandb_entity: daotuan
+  wandb_run_name: informer-hourly
+  wandb_mode: online  # "online", "offline", or "disabled"
+
+early_stopping:
+  early_stopping_patience: 10
+  early_stopping_delta: 0.0
+
+checkpoint:
+  checkpoint_every: 5
+  save_optimizer_state: true
+

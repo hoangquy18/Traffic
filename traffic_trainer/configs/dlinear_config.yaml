@@ -1,0 +1,75 @@
+paths:
+  csv_path: traffic_weather_2025_converted.csv
+  output_dir: experiments/dlinear_run01
+
+data:
+  numerical_features:
+    - length
+    - max_velocity
+    - temperature_2m
+    - dew_point_2m
+    - relative_humidity_2m
+    - wind_speed_10m
+    - wind_direction_10m
+    - wind_gusts_10m
+    - rain
+    - apparent_temperature
+    - pressure_msl
+    - surface_pressure
+    - sunshine_duration
+    - soil_temperature_0_to_7cm
+    - soil_moisture_0_to_7cm
+    - cloud_cover
+    - cloud_cover_low
+    - cloud_cover_mid
+    - cloud_cover_high
+  categorical_features:
+    - weekday
+    - period
+    - street_type
+    - street_level
+  prediction_horizons: [3]
+  sequence_length: 48  # 4 hours (can go higher, DLinear is very memory efficient!)
+  train_ratio: 0.7
+  val_ratio: 0.15
+  resample_rule: 1h
+
+model:
+  hidden_dim: 128  # Hidden dimension for classifier
+  dropout: 0.1
+  time_embedding_dim: 16  # Hour-of-day embedding
+  segment_embedding_dim: 32  # Road segment embedding
+
+dlinear:
+  seq_len: 48  # Input sequence length (should match data.sequence_length)
+  pred_len: 12  # Prediction length (not used for classification, but kept for API)
+  kernel_size: 13  # Moving average window for decomposition (~seq_len/4)
+  individual: false  # false = shared linear layers (faster), true = per-feature (better)
+  model_type: dlinear  # "dlinear" (with decomposition) or "nlinear" (with normalization)
+
+optimization:
+  batch_size: 32  # DLinear is VERY memory efficient! Can use large batch
+  learning_rate: 0.001  # Higher learning rate works well for DLinear
+  weight_decay: 0.0001
+  gradient_clip_norm: 1.0
+
+training:
+  epochs: 50
+  num_workers: 4  # Can use more workers since model is light
+  device: cuda
+  scheduler_type: plateau  # "plateau" or "cosine"
+
+logging:
+  wandb_project: traffic-weather
+  wandb_entity: daotuan
+  wandb_run_name: dlinear-hourly
+  wandb_mode: online  # "online", "offline", or "disabled"
+
+early_stopping:
+  early_stopping_patience: 10
+  early_stopping_delta: 0.0
+
+checkpoint:
+  checkpoint_every: 5
+  save_optimizer_state: true
+

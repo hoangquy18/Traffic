@@ -1,0 +1,79 @@
+paths:
+  csv_path: traffic_weather_2025_converted.csv
+  output_dir: experiments/patchtst_run01
+
+data:
+  numerical_features:
+    - length
+    - max_velocity
+    - temperature_2m
+    - dew_point_2m
+    - relative_humidity_2m
+    - wind_speed_10m
+    - wind_direction_10m
+    - wind_gusts_10m
+    - rain
+    - apparent_temperature
+    - pressure_msl
+    - surface_pressure
+    - sunshine_duration
+    - soil_temperature_0_to_7cm
+    - soil_moisture_0_to_7cm
+    - cloud_cover
+    - cloud_cover_low
+    - cloud_cover_mid
+    - cloud_cover_high
+  categorical_features:
+    - weekday
+    - period
+    - street_type
+    - street_level
+  prediction_horizons: [3]
+  sequence_length: 36  # REDUCED from 48 to 36 to save memory (3 hours)
+  train_ratio: 0.7
+  val_ratio: 0.15
+  resample_rule: 1h
+
+model:
+  hidden_dim: 64  # REDUCED from 128 to 64 to save memory
+  dropout: 0.1
+  time_embedding_dim: 8  # REDUCED from 16 to 8 to save memory
+  segment_embedding_dim: 16  # REDUCED from 32 to 16 to save memory
+
+patchtst:
+  seq_len: 36  # REDUCED from 48 to 36 to save memory (36/12 = 3 patches)
+  patch_len: 12  # Length of each patch (36/12 = 3 patches)
+  stride: 12  # Stride for patching (non-overlapping: stride = patch_len)
+  n_heads: 2  # REDUCED from 4 to 2 to save memory
+  n_layers: 1  # REDUCED from 2 to 1 to save memory
+  d_ff: 128  # REDUCED from 256 to 128 to save memory
+  activation: gelu  # Activation function: "gelu" or "relu"
+  channel_independence: false  # CHANGED to false to save memory (process all features together)
+
+optimization:
+  batch_size: 2  # REDUCED from 4 to 2 to avoid OOM
+  learning_rate: 0.0001  # Standard learning rate for Transformers
+  weight_decay: 0.0001
+  gradient_clip_norm: 1.0
+
+training:
+  epochs: 50
+  num_workers: 1  # REDUCED from 2 to 1 to save memory
+  device: cuda  # Use all available GPUs with DataParallel
+  scheduler_type: plateau  # "plateau" or "cosine"
+
+logging:
+  wandb_project: traffic-weather
+  wandb_entity: daotuan
+  wandb_run_name: patchtst-hourly
+  wandb_mode: online  # "online", "offline", or "disabled"
+
+early_stopping:
+  early_stopping_patience: 10
+  early_stopping_delta: 0.0
+
+checkpoint:
+  checkpoint_every: 5
+  save_optimizer_state: true
+
+
