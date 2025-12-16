@@ -1,10 +1,8 @@
-"""Grid search tuning for traditional ML models (tree, XGBoost, ARIMA, SARIMA).
+"""Grid search tuning for traditional ML models (tree, XGBoost).
 
 Chạy một lần để tune nhiều mô hình:
 - Decision Tree
 - XGBoost
-- ARIMA
-- SARIMA
 
 Kết quả sẽ được ghi vào file CSV, mỗi dòng là một combination hyperparameters.
 """
@@ -16,21 +14,169 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
 from traffic_trainer.trainers import (
-    ARIMATrainer,
-    ARIMATrainingConfig,
     DecisionTreeTrainer,
     DecisionTreeTrainingConfig,
-    SARIMATrainer,
-    SARIMATrainingConfig,
     XGBoostTrainer,
     XGBoostTrainingConfig,
 )
-from traffic_trainer.trainers.arima_trainer import load_config as load_arima_config
 from traffic_trainer.trainers.decision_tree_trainer import (
     load_config as load_dt_config,
 )
-from traffic_trainer.trainers.sarima_trainer import load_config as load_sarima_config
 from traffic_trainer.trainers.xgboost_trainer import load_config as load_xgb_config
+from traffic_trainer.data import load_dataset
+
+# Global dataset cache: key = (seq_len, tuple(prediction_horizons), csv_path, ...)
+_ML_DATASET_CACHE: Dict[tuple, Any] = {}
+
+# Weather features to filter out when --no-weather flag is used
+WEATHER_FEATURES = {
+    "temperature_2m",
+    "dew_point_2m",
+    "relative_humidity_2m",
+    "wind_speed_10m",
+    "wind_direction_10m",
+    "wind_gusts_10m",
+    "rain",
+    "apparent_temperature",
+    "pressure_msl",
+    "surface_pressure",
+    "sunshine_duration",
+    "soil_temperature_0_to_7cm",
+    "soil_moisture_0_to_7cm",
+    "cloud_cover",
+    "cloud_cover_low",
+    "cloud_cover_mid",
+    "cloud_cover_high",
+}
+
+
+def remove_weather_features(config: Any) -> None:
+    """Remove weather features from config's numerical_features if present."""
+    if hasattr(config, "numerical_features") and config.numerical_features:
+        original_count = len(config.numerical_features)
+        # Filter out weather features
+        config.numerical_features = [
+            f for f in config.numerical_features if f not in WEATHER_FEATURES
+        ]
+        removed_count = original_count - len(config.numerical_features)
+        if removed_count > 0:
+            print(
+                f"  [NO-WEATHER] Removed {removed_count} weather features. "
+                f"Remaining {len(config.numerical_features)} features: {config.numerical_features}"
+            )
+
+
+def get_or_load_ml_dataset(
+    csv_path: Path,
+    seq_len: int,
+    prediction_horizons: List[int],
+    config: Any,  # Config object để lấy các tham số khác
+) -> tuple:
+    """Load dataset từ cache hoặc load mới nếu chưa có cho ML models.
+
+    Returns:
+        (train_ds, val_ds, test_ds, feature_names, scaler, metadata)
+    """
+    cache_key = (
+        seq_len,
+        tuple(prediction_horizons),
+        str(csv_path),
+        config.train_ratio,
+        config.val_ratio,
+        config.resample_rule,
+        tuple(sorted(config.numerical_features or [])),
+        tuple(sorted(config.categorical_features or [])),
+    )
+
+    if cache_key in _ML_DATASET_CACHE:
+        print(
+            f"  [CACHE HIT] Reusing dataset for seq_len={seq_len}, horizons={prediction_horizons}"
+        )
+        return _ML_DATASET_CACHE[cache_key]
+
+    print(
+        f"  [CACHE MISS] Loading dataset for seq_len={seq_len}, horizons={prediction_horizons}..."
+    )
+
+    datasets = load_dataset(
+        csv_path=csv_path,
+        sequence_length=seq_len,
+        feature_columns={
+            "numerical": config.numerical_features or [],
+            "categorical": config.categorical_features or [],
+        },
+        prediction_horizons=tuple(prediction_horizons),
+        train_ratio=config.train_ratio,
+        val_ratio=config.val_ratio,
+        resample_rule=config.resample_rule,
+        normalize=True,
+        use_time_embedding=False,
+        use_segment_embedding=False,
+    )
+
+    _ML_DATASET_CACHE[cache_key] = datasets
+    return datasets
+
+
+def create_ml_trainer_with_cached_data(trainer_class, config, cached_datasets):
+    """Create ML trainer instance với cached datasets.
+
+    Args:
+        trainer_class: Trainer class (DecisionTreeTrainer, XGBoostTrainer, etc.)
+        config: Config object
+        cached_datasets: Pre-loaded datasets tuple
+
+    Returns:
+        Trainer instance với datasets đã được inject
+    """
+    from traffic_trainer.data import LOS_LEVELS
+
+    # Create trainer instance nhưng skip __init__
+    trainer = trainer_class.__new__(trainer_class)
+
+    # Setup basic attributes (copy from MLBaseTrainer.__init__)
+    trainer.config = config
+    trainer.prediction_horizons = sorted({int(h) for h in config.prediction_horizons})
+    trainer.num_horizons = len(trainer.prediction_horizons)
+    trainer.num_classes = len(LOS_LEVELS)
+
+    # Inject cached datasets thay vì gọi _load_data()
+    train_ds, val_ds, test_ds, feature_names, scaler, metadata = cached_datasets
+
+    trainer.feature_names = feature_names
+    trainer.scaler = scaler
+    trainer.metadata = metadata
+
+    # Convert to numpy arrays (flatten sequences) - need to call method from instance
+    # We'll create a temporary instance to get the method, or define it inline
+    def dataset_to_arrays(dataset):
+        """Convert dataset to feature matrix and target arrays."""
+        import numpy as np
+
+        features_list = []
+        targets_list = []
+        for i in range(len(dataset)):
+            sample, targets = dataset[i]
+            # Use the last timestep of the sequence as features
+            features = sample["features"][-1].numpy()  # [num_features]
+            features_list.append(features)
+            targets_list.append(targets.numpy())  # [num_horizons]
+        X = np.array(features_list)  # [num_samples, num_features]
+        y = np.array(targets_list)  # [num_samples, num_horizons]
+        return X, y
+
+    trainer.X_train, trainer.y_train = dataset_to_arrays(train_ds)
+    trainer.X_val, trainer.y_val = dataset_to_arrays(val_ds)
+    trainer.X_test, trainer.y_test = dataset_to_arrays(test_ds)
+
+    # Setup output directory
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Training state
+    trainer.models = {}  # One model per horizon
+    trainer.history = {"train": [], "val": []}
+
+    return trainer
 
 
 def cartesian_product(param_grid: Dict[str, Iterable[Any]]) -> List[Dict[str, Any]]:
@@ -95,13 +241,6 @@ def extract_ml_val_metrics(
     }
 
 
-def score_ts_results(test_results: Dict[str, Any], primary_horizon: int) -> float:
-    """Get F1 macro from ARIMA/SARIMA test results."""
-    horizon_key = f"horizon_{primary_horizon}"
-    h_res = test_results.get(horizon_key, {})
-    return float(h_res.get("f1_macro", 0.0))
-
-
 def run_grid_search_decision_tree(
     base_config_path: Path,
     base_output_dir: Path,
@@ -110,18 +249,37 @@ def run_grid_search_decision_tree(
     prediction_horizon: int,
     results_csv: Path | None = None,
     csv_fieldnames: List[str] | None = None,
+    no_weather: bool = False,
 ) -> List[Dict[str, Any]]:
     combos = cartesian_product(param_grid)
     results: List[Dict[str, Any]] = []
+
+    # Load base config để lấy csv_path và các tham số khác
+    base_config = load_dt_config(base_config_path)
+    if no_weather:
+        remove_weather_features(base_config)
+
+    # Multi-horizon prediction: 1h, 2h, 3h ahead (giống DL scan)
+    prediction_horizons = [1, 2, 3]
+
+    # Load dataset một lần cho combination này
+    cached_datasets = get_or_load_ml_dataset(
+        csv_path=base_config.csv_path,
+        seq_len=sequence_length,
+        prediction_horizons=prediction_horizons,
+        config=base_config,
+    )
 
     for idx, params in enumerate(combos, start=1):
         print(f"\n=== DecisionTree grid search {idx}/{len(combos)} ===")
         print(f"Params: {params}")
 
         config: DecisionTreeTrainingConfig = load_dt_config(base_config_path)
+        if no_weather:
+            remove_weather_features(config)
         # Override data-related parameters
         config.sequence_length = sequence_length
-        config.prediction_horizons = [prediction_horizon]
+        config.prediction_horizons = prediction_horizons
 
         # Override model hyperparameters
         for k, v in params.items():
@@ -132,17 +290,21 @@ def run_grid_search_decision_tree(
             base_output_dir, "decision_tree", params, idx
         )
 
-        trainer = DecisionTreeTrainer(config)
+        # Create trainer với cached datasets
+        trainer = create_ml_trainer_with_cached_data(
+            DecisionTreeTrainer, config, cached_datasets
+        )
         train_results = trainer.train()
 
-        primary_h = config.prediction_horizons[0]
+        # Lấy metrics cho primary horizon (horizon đầu tiên = 1)
+        primary_h = 1
         metrics = extract_ml_val_metrics(train_results["history"], primary_h)
 
         row: Dict[str, Any] = {
             "model": "DecisionTree",
-            "primary_horizon": primary_h,
+            "primary_horizon": 1,  # Primary horizon luôn là 1 (giống DL scan)
             "sequence_length": sequence_length,
-            "prediction_horizon": prediction_horizon,
+            "prediction_horizon": prediction_horizon,  # Giữ lại để track scan parameter
             # giữ lại field score_f1_macro cho tiện sort
             "score_f1_macro": metrics.get("val_f1_macro", 0.0),
             "output_dir": str(config.output_dir),
@@ -166,18 +328,37 @@ def run_grid_search_xgboost(
     prediction_horizon: int,
     results_csv: Path | None = None,
     csv_fieldnames: List[str] | None = None,
+    no_weather: bool = False,
 ) -> List[Dict[str, Any]]:
     combos = cartesian_product(param_grid)
     results: List[Dict[str, Any]] = []
+
+    # Load base config để lấy csv_path và các tham số khác
+    base_config = load_xgb_config(base_config_path)
+    if no_weather:
+        remove_weather_features(base_config)
+
+    # Multi-horizon prediction: 1h, 2h, 3h ahead (giống DL scan)
+    prediction_horizons = [1, 2, 3]
+
+    # Load dataset một lần cho combination này
+    cached_datasets = get_or_load_ml_dataset(
+        csv_path=base_config.csv_path,
+        seq_len=sequence_length,
+        prediction_horizons=prediction_horizons,
+        config=base_config,
+    )
 
     for idx, params in enumerate(combos, start=1):
         print(f"\n=== XGBoost grid search {idx}/{len(combos)} ===")
         print(f"Params: {params}")
 
         config: XGBoostTrainingConfig = load_xgb_config(base_config_path)
+        if no_weather:
+            remove_weather_features(config)
         # Override data-related parameters
         config.sequence_length = sequence_length
-        config.prediction_horizons = [prediction_horizon]
+        config.prediction_horizons = prediction_horizons
 
         # Override model hyperparameters
         for k, v in params.items():
@@ -186,17 +367,21 @@ def run_grid_search_xgboost(
         # Output dir for this run
         config.output_dir = make_run_output_dir(base_output_dir, "xgboost", params, idx)
 
-        trainer = XGBoostTrainer(config)
+        # Create trainer với cached datasets
+        trainer = create_ml_trainer_with_cached_data(
+            XGBoostTrainer, config, cached_datasets
+        )
         train_results = trainer.train()
 
-        primary_h = config.prediction_horizons[0]
+        # Lấy metrics cho primary horizon (horizon đầu tiên = 1)
+        primary_h = 1
         metrics = extract_ml_val_metrics(train_results["history"], primary_h)
 
         row: Dict[str, Any] = {
             "model": "XGBoost",
-            "primary_horizon": primary_h,
+            "primary_horizon": 1,  # Primary horizon luôn là 1 (giống DL scan)
             "sequence_length": sequence_length,
-            "prediction_horizon": prediction_horizon,
+            "prediction_horizon": prediction_horizon,  # Giữ lại để track scan parameter
             "score_f1_macro": metrics.get("val_f1_macro", 0.0),
             "output_dir": str(config.output_dir),
             **metrics,
@@ -205,104 +390,6 @@ def run_grid_search_xgboost(
         results.append(row)
 
         # Ghi incremental vào CSV
-        if results_csv is not None and csv_fieldnames is not None:
-            append_row_csv(results_csv, csv_fieldnames, row)
-
-    return results
-
-
-def run_grid_search_arima(
-    base_config_path: Path,
-    base_output_dir: Path,
-    param_grid: Dict[str, Iterable[Any]],
-    sequence_length: int,
-    prediction_horizon: int,
-    results_csv: Path | None = None,
-    csv_fieldnames: List[str] | None = None,
-) -> List[Dict[str, Any]]:
-    combos = cartesian_product(param_grid)
-    results: List[Dict[str, Any]] = []
-
-    for idx, params in enumerate(combos, start=1):
-        print(f"\n=== ARIMA grid search {idx}/{len(combos)} ===")
-        print(f"Params: {params}")
-
-        config: ARIMATrainingConfig = load_arima_config(base_config_path)
-        # Override data-related parameters
-        config.sequence_length = sequence_length
-        config.prediction_horizons = [prediction_horizon]
-        for k, v in params.items():
-            setattr(config, k, v)
-
-        config.output_dir = make_run_output_dir(base_output_dir, "arima", params, idx)
-
-        trainer = ARIMATrainer(config)
-        _ = trainer.train()
-        test_results = trainer.evaluate()
-
-        primary_h = config.prediction_horizons[0]
-        score = score_ts_results(test_results, primary_h)
-
-        row: Dict[str, Any] = {
-            "model": "ARIMA",
-            "primary_horizon": primary_h,
-            "sequence_length": sequence_length,
-            "prediction_horizon": prediction_horizon,
-            "score_f1_macro": score,
-            "output_dir": str(config.output_dir),
-        }
-        row.update(params)
-        results.append(row)
-
-        if results_csv is not None and csv_fieldnames is not None:
-            append_row_csv(results_csv, csv_fieldnames, row)
-
-    return results
-
-
-def run_grid_search_sarima(
-    base_config_path: Path,
-    base_output_dir: Path,
-    param_grid: Dict[str, Iterable[Any]],
-    sequence_length: int,
-    prediction_horizon: int,
-    results_csv: Path | None = None,
-    csv_fieldnames: List[str] | None = None,
-) -> List[Dict[str, Any]]:
-    combos = cartesian_product(param_grid)
-    results: List[Dict[str, Any]] = []
-
-    for idx, params in enumerate(combos, start=1):
-        print(f"\n=== SARIMA grid search {idx}/{len(combos)} ===")
-        print(f"Params: {params}")
-
-        config: SARIMATrainingConfig = load_sarima_config(base_config_path)
-        # Override data-related parameters
-        config.sequence_length = sequence_length
-        config.prediction_horizons = [prediction_horizon]
-        for k, v in params.items():
-            setattr(config, k, v)
-
-        config.output_dir = make_run_output_dir(base_output_dir, "sarima", params, idx)
-
-        trainer = SARIMATrainer(config)
-        _ = trainer.train()
-        test_results = trainer.evaluate()
-
-        primary_h = config.prediction_horizons[0]
-        score = score_ts_results(test_results, primary_h)
-
-        row: Dict[str, Any] = {
-            "model": "SARIMA",
-            "primary_horizon": primary_h,
-            "sequence_length": sequence_length,
-            "prediction_horizon": prediction_horizon,
-            "score_f1_macro": score,
-            "output_dir": str(config.output_dir),
-        }
-        row.update(params)
-        results.append(row)
-
         if results_csv is not None and csv_fieldnames is not None:
             append_row_csv(results_csv, csv_fieldnames, row)
 
@@ -352,7 +439,7 @@ def append_row_csv(path: Path, fieldnames: List[str], row: Dict[str, Any]) -> No
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Grid search tuning for ML models (DecisionTree, XGBoost, ARIMA, SARIMA)"
+        description="Grid search tuning for ML models (DecisionTree, XGBoost)"
     )
     parser.add_argument(
         "--dt-config",
@@ -367,18 +454,6 @@ def parse_args() -> argparse.Namespace:
         help="YAML config path cho XGBoost",
     )
     parser.add_argument(
-        "--arima-config",
-        type=Path,
-        default=Path(__file__).parent.parent / "configs" / "arima_config.yaml",
-        help="YAML config path cho ARIMA",
-    )
-    parser.add_argument(
-        "--sarima-config",
-        type=Path,
-        default=Path(__file__).parent.parent / "configs" / "sarima_config.yaml",
-        help="YAML config path cho SARIMA",
-    )
-    parser.add_argument(
         "--output-root",
         type=Path,
         default=Path("experiments") / "ml_grid_search",
@@ -390,11 +465,36 @@ def parse_args() -> argparse.Namespace:
         default=Path("experiments") / "ml_grid_search" / "grid_search_results.csv",
         help="Đường dẫn file CSV lưu tổng hợp kết quả",
     )
+    parser.add_argument(
+        "--no-weather",
+        action="store_true",
+        help="Remove weather features from numerical_features (only use traffic features)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+
+    # Auto-adjust CSV filename if --no-weather is used
+    if args.no_weather:
+        csv_path = args.results_csv
+        if csv_path.suffix == ".csv":
+            # Insert "_no_weather" before .csv extension
+            csv_path = csv_path.parent / f"{csv_path.stem}_no_weather{csv_path.suffix}"
+        else:
+            csv_path = csv_path.parent / f"{csv_path.name}_no_weather"
+        args.results_csv = csv_path
+        print(
+            f"\n🌤️  [NO-WEATHER MODE] Weather features will be removed from all models"
+        )
+        print(f"   Results will be saved to: {args.results_csv}")
+    else:
+        print(f"\n🌦️  [WITH-WEATHER MODE] Using all features including weather data")
+        print(f"   Results will be saved to: {args.results_csv}")
+
+    print(f"📊 [MULTI-HORIZON] All models will use prediction_horizons = [1, 2, 3]")
+    print(f"   Metrics will be reported for primary horizon = 1 (giống DL scan)")
 
     all_results: List[Dict[str, Any]] = []
 
@@ -437,6 +537,7 @@ def main() -> None:
                     prediction_horizon=horizon,
                     results_csv=args.results_csv,
                     csv_fieldnames=base_metric_fields + dt_param_fields,
+                    no_weather=args.no_weather,
                 )
                 all_results.extend(dt_results)
     except Exception as e:
@@ -469,67 +570,24 @@ def main() -> None:
                     prediction_horizon=horizon,
                     results_csv=args.results_csv,
                     csv_fieldnames=base_metric_fields + xgb_param_fields,
+                    no_weather=args.no_weather,
                 )
                 all_results.extend(xgb_results)
     except Exception as e:
         print(f"[WARN] XGBoost grid search failed: {e}")
 
-    # ============================
-    # 3) ARIMA grid search
-    # ============================
-    arima_param_grid: Dict[str, Iterable[Any]] = {
-        # (p, d, q)
-        "order": [(1, 1, 1), (2, 1, 2)],
-        "max_iter": [50],
-    }
-    arima_param_fields = list(arima_param_grid.keys())
-
-    try:
-        for seq_len in range(1, 7):
-            for horizon in range(1, 6):
-                arima_results = run_grid_search_arima(
-                    args.arima_config,
-                    args.output_root,
-                    arima_param_grid,
-                    sequence_length=seq_len,
-                    prediction_horizon=horizon,
-                    results_csv=args.results_csv,
-                    csv_fieldnames=base_metric_fields + arima_param_fields,
-                )
-                all_results.extend(arima_results)
-    except Exception as e:
-        print(f"[WARN] ARIMA grid search failed: {e}")
-
-    # ============================
-    # 4) SARIMA grid search
-    # ============================
-    sarima_param_grid: Dict[str, Iterable[Any]] = {
-        # (p, d, q)
-        "order": [(1, 1, 1)],
-        # (P, D, Q, s) với s=24 cho dữ liệu theo giờ
-        "seasonal_order": [(1, 1, 1, 24), (2, 1, 1, 24)],
-        "max_iter": [50],
-    }
-    sarima_param_fields = list(sarima_param_grid.keys())
-
-    try:
-        for seq_len in range(1, 7):
-            for horizon in range(1, 6):
-                sarima_results = run_grid_search_sarima(
-                    args.sarima_config,
-                    args.output_root,
-                    sarima_param_grid,
-                    sequence_length=seq_len,
-                    prediction_horizon=horizon,
-                    results_csv=args.results_csv,
-                    csv_fieldnames=base_metric_fields + sarima_param_fields,
-                )
-                all_results.extend(sarima_results)
-    except Exception as e:
-        print(f"[WARN] SARIMA grid search failed: {e}")
-
-    # Ghi toàn bộ kết quả ra CSV
-    write_results_csv(args.results_csv, all_results)
+    # Ghi toàn bộ kết quả ra CSV (nếu có kết quả mới)
+    if all_results:
+        write_results_csv(args.results_csv, all_results)
+        print(f"\n✅ Grid search complete!")
+        if args.no_weather:
+            print(f"   Mode: NO-WEATHER (only traffic features)")
+        else:
+            print(f"   Mode: WITH-WEATHER (all features)")
+        print(f"   Total runs: {len(all_results)}")
+        print(f"   Results saved to: {args.results_csv}")
+    else:
+        print("\n⚠️  No results to save. Check for errors above.")
 
 
 if __name__ == "__main__":
