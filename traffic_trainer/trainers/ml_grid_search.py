@@ -247,8 +247,8 @@ def run_grid_search_decision_tree(
     param_grid: Dict[str, Iterable[Any]],
     sequence_length: int,
     prediction_horizon: int,
-    results_csv: Path | None = None,
-    csv_fieldnames: List[str] | None = None,
+    results_csv: Path,
+    csv_fieldnames: List[str],
     no_weather: bool = False,
 ) -> List[Dict[str, Any]]:
     combos = cartesian_product(param_grid)
@@ -259,63 +259,76 @@ def run_grid_search_decision_tree(
     if no_weather:
         remove_weather_features(base_config)
 
-    # Multi-horizon prediction: 1h, 2h, 3h ahead (giống DL scan)
-    prediction_horizons = [1, 2, 3]
+    # Scan với các multi-horizon combinations: [1], [1, 2], [1, 2, 3], [1, 2, 3, 4], [1, 2, 3, 4, 5]
+    horizon_combinations = [
+        [1],
+        [1, 2],
+        [1, 2, 3],
+        [1, 2, 3, 4],
+        [1, 2, 3, 4, 5],
+    ]
 
-    # Load dataset một lần cho combination này
-    cached_datasets = get_or_load_ml_dataset(
-        csv_path=base_config.csv_path,
-        seq_len=sequence_length,
-        prediction_horizons=prediction_horizons,
-        config=base_config,
-    )
-
-    for idx, params in enumerate(combos, start=1):
-        print(f"\n=== DecisionTree grid search {idx}/{len(combos)} ===")
-        print(f"Params: {params}")
-
-        config: DecisionTreeTrainingConfig = load_dt_config(base_config_path)
-        if no_weather:
-            remove_weather_features(config)
-        # Override data-related parameters
-        config.sequence_length = sequence_length
-        config.prediction_horizons = prediction_horizons
-
-        # Override model hyperparameters
-        for k, v in params.items():
-            setattr(config, k, v)
-
-        # Output dir for this run
-        config.output_dir = make_run_output_dir(
-            base_output_dir, "decision_tree", params, idx
+    for prediction_horizons in horizon_combinations:
+        # Load dataset một lần cho combination này
+        cached_datasets = get_or_load_ml_dataset(
+            csv_path=base_config.csv_path,
+            seq_len=sequence_length,
+            prediction_horizons=prediction_horizons,
+            config=base_config,
         )
 
-        # Create trainer với cached datasets
-        trainer = create_ml_trainer_with_cached_data(
-            DecisionTreeTrainer, config, cached_datasets
-        )
-        train_results = trainer.train()
+        for idx, params in enumerate(combos, start=1):
+            print(
+                f"\n=== DecisionTree grid search {idx}/{len(combos)} | "
+                f"horizons={prediction_horizons} ==="
+            )
+            print(f"Params: {params}")
 
-        # Lấy metrics cho primary horizon (horizon đầu tiên = 1)
-        primary_h = 1
-        metrics = extract_ml_val_metrics(train_results["history"], primary_h)
+            config: DecisionTreeTrainingConfig = load_dt_config(base_config_path)
+            if no_weather:
+                remove_weather_features(config)
+            # Override data-related parameters
+            config.sequence_length = sequence_length
+            config.prediction_horizons = prediction_horizons
 
-        row: Dict[str, Any] = {
-            "model": "DecisionTree",
-            "primary_horizon": 1,  # Primary horizon luôn là 1 (giống DL scan)
-            "sequence_length": sequence_length,
-            "prediction_horizon": prediction_horizon,  # Giữ lại để track scan parameter
-            # giữ lại field score_f1_macro cho tiện sort
-            "score_f1_macro": metrics.get("val_f1_macro", 0.0),
-            "output_dir": str(config.output_dir),
-            **metrics,
-        }
-        row.update(params)
-        results.append(row)
+            # Override model hyperparameters
+            for k, v in params.items():
+                setattr(config, k, v)
 
-        # Ghi incremental vào CSV ngay sau khi xong mỗi combination
-        if results_csv is not None and csv_fieldnames is not None:
-            append_row_csv(results_csv, csv_fieldnames, row)
+            # Output dir for this run
+            config.output_dir = make_run_output_dir(
+                base_output_dir, "decision_tree", params, idx
+            )
+
+            # Create trainer với cached datasets
+            trainer = create_ml_trainer_with_cached_data(
+                DecisionTreeTrainer, config, cached_datasets
+            )
+            train_results = trainer.train()
+
+            # Lấy metrics cho primary horizon (horizon đầu tiên = 1)
+            primary_h = 1
+            metrics = extract_ml_val_metrics(train_results["history"], primary_h)
+
+            row: Dict[str, Any] = {
+                "model": "DecisionTree",
+                "primary_horizon": 1,  # Primary horizon luôn là 1
+                "sequence_length": sequence_length,
+                "prediction_horizon": prediction_horizon,  # Giữ lại để track scan parameter
+                "prediction_horizons": str(
+                    prediction_horizons
+                ),  # Track actual horizons used
+                # giữ lại field score_f1_macro cho tiện sort
+                "score_f1_macro": metrics.get("val_f1_macro", 0.0),
+                "output_dir": str(config.output_dir),
+                **metrics,
+            }
+            row.update(params)
+            results.append(row)
+
+            # Ghi incremental vào CSV ngay sau khi xong mỗi combination
+            if results_csv and csv_fieldnames:
+                append_row_csv(results_csv, csv_fieldnames, row)
 
     return results
 
@@ -326,8 +339,8 @@ def run_grid_search_xgboost(
     param_grid: Dict[str, Iterable[Any]],
     sequence_length: int,
     prediction_horizon: int,
-    results_csv: Path | None = None,
-    csv_fieldnames: List[str] | None = None,
+    results_csv: Path,
+    csv_fieldnames: List[str],
     no_weather: bool = False,
 ) -> List[Dict[str, Any]]:
     combos = cartesian_product(param_grid)
@@ -338,60 +351,75 @@ def run_grid_search_xgboost(
     if no_weather:
         remove_weather_features(base_config)
 
-    # Multi-horizon prediction: 1h, 2h, 3h ahead (giống DL scan)
-    prediction_horizons = [1, 2, 3]
+    # Scan với các multi-horizon combinations: [1], [1, 2], [1, 2, 3], [1, 2, 3, 4], [1, 2, 3, 4, 5]
+    horizon_combinations = [
+        [1],
+        [1, 2],
+        [1, 2, 3],
+        [1, 2, 3, 4],
+        [1, 2, 3, 4, 5],
+    ]
 
-    # Load dataset một lần cho combination này
-    cached_datasets = get_or_load_ml_dataset(
-        csv_path=base_config.csv_path,
-        seq_len=sequence_length,
-        prediction_horizons=prediction_horizons,
-        config=base_config,
-    )
-
-    for idx, params in enumerate(combos, start=1):
-        print(f"\n=== XGBoost grid search {idx}/{len(combos)} ===")
-        print(f"Params: {params}")
-
-        config: XGBoostTrainingConfig = load_xgb_config(base_config_path)
-        if no_weather:
-            remove_weather_features(config)
-        # Override data-related parameters
-        config.sequence_length = sequence_length
-        config.prediction_horizons = prediction_horizons
-
-        # Override model hyperparameters
-        for k, v in params.items():
-            setattr(config, k, v)
-
-        # Output dir for this run
-        config.output_dir = make_run_output_dir(base_output_dir, "xgboost", params, idx)
-
-        # Create trainer với cached datasets
-        trainer = create_ml_trainer_with_cached_data(
-            XGBoostTrainer, config, cached_datasets
+    for prediction_horizons in horizon_combinations:
+        # Load dataset một lần cho combination này
+        cached_datasets = get_or_load_ml_dataset(
+            csv_path=base_config.csv_path,
+            seq_len=sequence_length,
+            prediction_horizons=prediction_horizons,
+            config=base_config,
         )
-        train_results = trainer.train()
 
-        # Lấy metrics cho primary horizon (horizon đầu tiên = 1)
-        primary_h = 1
-        metrics = extract_ml_val_metrics(train_results["history"], primary_h)
+        for idx, params in enumerate(combos, start=1):
+            print(
+                f"\n=== XGBoost grid search {idx}/{len(combos)} | "
+                f"horizons={prediction_horizons} ==="
+            )
+            print(f"Params: {params}")
 
-        row: Dict[str, Any] = {
-            "model": "XGBoost",
-            "primary_horizon": 1,  # Primary horizon luôn là 1 (giống DL scan)
-            "sequence_length": sequence_length,
-            "prediction_horizon": prediction_horizon,  # Giữ lại để track scan parameter
-            "score_f1_macro": metrics.get("val_f1_macro", 0.0),
-            "output_dir": str(config.output_dir),
-            **metrics,
-        }
-        row.update(params)
-        results.append(row)
+            config: XGBoostTrainingConfig = load_xgb_config(base_config_path)
+            if no_weather:
+                remove_weather_features(config)
+            # Override data-related parameters
+            config.sequence_length = sequence_length
+            config.prediction_horizons = prediction_horizons
 
-        # Ghi incremental vào CSV
-        if results_csv is not None and csv_fieldnames is not None:
-            append_row_csv(results_csv, csv_fieldnames, row)
+            # Override model hyperparameters
+            for k, v in params.items():
+                setattr(config, k, v)
+
+            # Output dir for this run
+            config.output_dir = make_run_output_dir(
+                base_output_dir, "xgboost", params, idx
+            )
+
+            # Create trainer với cached datasets
+            trainer = create_ml_trainer_with_cached_data(
+                XGBoostTrainer, config, cached_datasets
+            )
+            train_results = trainer.train()
+
+            # Lấy metrics cho primary horizon (horizon đầu tiên = 1)
+            primary_h = 1
+            metrics = extract_ml_val_metrics(train_results["history"], primary_h)
+
+            row: Dict[str, Any] = {
+                "model": "XGBoost",
+                "primary_horizon": 1,  # Primary horizon luôn là 1
+                "sequence_length": sequence_length,
+                "prediction_horizon": prediction_horizon,  # Giữ lại để track scan parameter
+                "prediction_horizons": str(
+                    prediction_horizons
+                ),  # Track actual horizons used
+                "score_f1_macro": metrics.get("val_f1_macro", 0.0),
+                "output_dir": str(config.output_dir),
+                **metrics,
+            }
+            row.update(params)
+            results.append(row)
+
+            # Ghi incremental vào CSV
+            if results_csv and csv_fieldnames:
+                append_row_csv(results_csv, csv_fieldnames, row)
 
     return results
 
@@ -493,8 +521,13 @@ def main() -> None:
         print(f"\n🌦️  [WITH-WEATHER MODE] Using all features including weather data")
         print(f"   Results will be saved to: {args.results_csv}")
 
-    print(f"📊 [MULTI-HORIZON] All models will use prediction_horizons = [1, 2, 3]")
-    print(f"   Metrics will be reported for primary horizon = 1 (giống DL scan)")
+    print(f"📊 [MULTI-HORIZON SCAN] Models will be scanned with:")
+    print(f"   - prediction_horizons = [1]")
+    print(f"   - prediction_horizons = [1, 2]")
+    print(f"   - prediction_horizons = [1, 2, 3]")
+    print(f"   - prediction_horizons = [1, 2, 3, 4]")
+    print(f"   - prediction_horizons = [1, 2, 3, 4, 5]")
+    print(f"   Metrics will be reported for primary horizon = 1")
 
     all_results: List[Dict[str, Any]] = []
 
@@ -504,6 +537,7 @@ def main() -> None:
         "primary_horizon",
         "sequence_length",
         "prediction_horizon",
+        "prediction_horizons",  # Track actual horizons used
         "score_f1_macro",
         "output_dir",
         "val_accuracy",
@@ -518,28 +552,29 @@ def main() -> None:
     # ============================
     dt_param_grid: Dict[str, Iterable[Any]] = {
         # Các giá trị dưới đây chỉ là ví dụ, bạn có thể chỉnh lại cho phù hợp
-        "max_depth": [5, 10, None],
-        "min_samples_split": [2, 5],
-        "min_samples_leaf": [1, 5],
+        "max_depth": [5],
+        "min_samples_split": [2],
+        "min_samples_leaf": [1],
         "max_features": ["sqrt", "log2"],
-        "criterion": ["gini", "entropy"],
+        "criterion": ["gini"],
     }
     dt_param_fields = list(dt_param_grid.keys())
 
     try:
         for seq_len in range(1, 7):  # 1..6
-            for horizon in range(1, 6):  # 1..5
-                dt_results = run_grid_search_decision_tree(
-                    args.dt_config,
-                    args.output_root,
-                    dt_param_grid,
-                    sequence_length=seq_len,
-                    prediction_horizon=horizon,
-                    results_csv=args.results_csv,
-                    csv_fieldnames=base_metric_fields + dt_param_fields,
-                    no_weather=args.no_weather,
-                )
-                all_results.extend(dt_results)
+            # Note: prediction_horizon parameter chỉ để track trong CSV,
+            # thực tế sẽ scan qua các horizon combinations [1], [1,2], [1,2,3], [1,2,3,4], [1,2,3,4,5]
+            dt_results = run_grid_search_decision_tree(
+                args.dt_config,
+                args.output_root,
+                dt_param_grid,
+                sequence_length=seq_len,
+                prediction_horizon=seq_len,  # Dùng seq_len làm identifier, không ảnh hưởng đến scan
+                results_csv=args.results_csv,
+                csv_fieldnames=base_metric_fields + dt_param_fields,
+                no_weather=args.no_weather,
+            )
+            all_results.extend(dt_results)
     except Exception as e:
         print(f"[WARN] DecisionTree grid search failed: {e}")
 
@@ -547,13 +582,13 @@ def main() -> None:
     # 2) XGBoost grid search
     # ============================
     xgb_param_grid: Dict[str, Iterable[Any]] = {
-        "n_estimators": [100, 200],
-        "max_depth": [4, 6],
-        "learning_rate": [0.05, 0.1],
+        "n_estimators": [100],
+        "max_depth": [4],
+        "learning_rate": [0.05],
         "subsample": [0.8],
         "colsample_bytree": [0.8],
-        "min_child_weight": [1, 5],
-        "gamma": [0.0, 1.0],
+        "min_child_weight": [1],
+        "gamma": [0.0],
         "reg_alpha": [0.0],
         "reg_lambda": [1.0],
     }
@@ -561,18 +596,19 @@ def main() -> None:
 
     try:
         for seq_len in range(1, 7):
-            for horizon in range(1, 6):
-                xgb_results = run_grid_search_xgboost(
-                    args.xgb_config,
-                    args.output_root,
-                    xgb_param_grid,
-                    sequence_length=seq_len,
-                    prediction_horizon=horizon,
-                    results_csv=args.results_csv,
-                    csv_fieldnames=base_metric_fields + xgb_param_fields,
-                    no_weather=args.no_weather,
-                )
-                all_results.extend(xgb_results)
+            # Note: prediction_horizon parameter chỉ để track trong CSV,
+            # thực tế sẽ scan qua các horizon combinations [1], [1,2], [1,2,3], [1,2,3,4], [1,2,3,4,5]
+            xgb_results = run_grid_search_xgboost(
+                args.xgb_config,
+                args.output_root,
+                xgb_param_grid,
+                sequence_length=seq_len,
+                prediction_horizon=seq_len,  # Dùng seq_len làm identifier, không ảnh hưởng đến scan
+                results_csv=args.results_csv,
+                csv_fieldnames=base_metric_fields + xgb_param_fields,
+                no_weather=args.no_weather,
+            )
+            all_results.extend(xgb_results)
     except Exception as e:
         print(f"[WARN] XGBoost grid search failed: {e}")
 
