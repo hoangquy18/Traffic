@@ -336,19 +336,29 @@ def scan_rnn(
     no_weather: bool = False,
 ) -> None:
     # RNN không phải attention-based: ẩn tầng 64/128/256, layers 1/2/3
-    hidden_dims = [128, 256]
-    num_layers_list = [2, 3]
-    emb_dims = [8, 16, 32]  # dùng cho cả time & segment embedding nếu có
+    hidden_dims = [128]
+    num_layers_list = [2]
+    emb_dims = [8]  # dùng cho cả time & segment embedding nếu có
 
     # Load base config để lấy csv_path và các tham số khác
     base_config = load_rnn_config(config_path)
     if no_weather:
         remove_weather_features(base_config)
 
+    # Scan với các multi-horizon combinations: [1], [1, 2], [1, 2, 3], [1, 2, 3, 4], [1, 2, 3, 4, 5]
+    horizon_combinations = [
+        [1],
+        [1, 2],
+        [1, 2, 3],
+        [1, 2, 3, 4],
+        [1, 2, 3, 4, 5],
+    ]
+
     for seq_len in seq_range:
-        for horizon in horizon_range:
-            # Multi-horizon prediction: 1h, 2h, 3h ahead
-            prediction_horizons = [1, 2, 3]
+        # Note: horizon_range không còn cần thiết vì đã scan qua các horizon combinations
+        # Dùng max horizon từ combinations để làm identifier
+        for prediction_horizons in horizon_combinations:
+            max_horizon = max(prediction_horizons)
 
             # Load dataset một lần cho combination này
             cached_datasets = get_or_load_dataset(
@@ -363,7 +373,7 @@ def scan_rnn(
                 for num_layers in num_layers_list:
                     for emb_dim in emb_dims:
                         print(
-                            f"\n=== RNN | seq_len={seq_len}, horizon={horizon}, "
+                            f"\n=== RNN | seq_len={seq_len}, horizons={prediction_horizons}, "
                             f"hidden_dim={hidden_dim}, layers={num_layers}, emb_dim={emb_dim} ==="
                         )
                         config = load_rnn_config(config_path)
@@ -378,7 +388,7 @@ def scan_rnn(
                             config.segment_embedding_dim = emb_dim
 
                         config.output_dir = make_run_output_dir(
-                            output_root, "rnn", seq_len, horizon
+                            output_root, "rnn", seq_len, max_horizon
                         )
 
                         # Create trainer với cached datasets
@@ -395,7 +405,10 @@ def scan_rnn(
                             "model": "RNN",
                             "primary_horizon": 1,  # Primary horizon luôn là 1
                             "sequence_length": seq_len,
-                            "prediction_horizon": horizon,  # Giữ lại để track scan parameter
+                            "prediction_horizon": max_horizon,  # Dùng max horizon làm identifier
+                            "prediction_horizons": str(
+                                prediction_horizons
+                            ),  # Track actual horizons used
                             "hidden_dim": hidden_dim,
                             "num_layers": num_layers,
                             "embedding_dim": emb_dim,
@@ -416,17 +429,28 @@ def scan_gnn(
     no_weather: bool = False,
 ) -> None:
     # GNN (RNN+GNN) không hoàn toàn attention-based: cho phép 64/128/256
-    hidden_dims = [128, 256]
-    num_layers_list = [2, 3]
-    emb_dims = [8, 16, 32]
+    hidden_dims = [128]
+    num_layers_list = [2]
+    emb_dims = [8]
 
     base_config = load_gnn_config(config_path)
     if no_weather:
         remove_weather_features(base_config)
-    prediction_horizons = [1, 2, 3]  # Multi-horizon prediction
+
+    # Scan với các multi-horizon combinations: [1], [1, 2], [1, 2, 3], [1, 2, 3, 4], [1, 2, 3, 4, 5]
+    horizon_combinations = [
+        [1],
+        [1, 2],
+        [1, 2, 3],
+        [1, 2, 3, 4],
+        [1, 2, 3, 4, 5],
+    ]
 
     for seq_len in seq_range:
-        for horizon in horizon_range:
+        # Note: horizon_range không còn cần thiết vì đã scan qua các horizon combinations
+        for prediction_horizons in horizon_combinations:
+            max_horizon = max(prediction_horizons)
+
             # Load dataset một lần cho combination này
             cached_datasets = get_or_load_dataset(
                 csv_path=base_config.csv_path,
@@ -440,7 +464,7 @@ def scan_gnn(
                 for num_layers in num_layers_list:
                     for emb_dim in emb_dims:
                         print(
-                            f"\n=== GNN | seq_len={seq_len}, horizon={horizon}, "
+                            f"\n=== GNN | seq_len={seq_len}, horizons={prediction_horizons}, "
                             f"hidden_dim={hidden_dim}, layers={num_layers}, emb_dim={emb_dim} ==="
                         )
                         config: GraphTrainingConfig = load_gnn_config(config_path)
@@ -456,7 +480,7 @@ def scan_gnn(
                             config.segment_embedding_dim = emb_dim
 
                         config.output_dir = make_run_output_dir(
-                            output_root, "gnn", seq_len, horizon
+                            output_root, "gnn", seq_len, max_horizon
                         )
 
                         trainer = create_trainer_with_cached_data(
@@ -471,7 +495,10 @@ def scan_gnn(
                             "model": "GNN",
                             "primary_horizon": 1,
                             "sequence_length": seq_len,
-                            "prediction_horizon": horizon,
+                            "prediction_horizon": max_horizon,  # Dùng max horizon làm identifier
+                            "prediction_horizons": str(
+                                prediction_horizons
+                            ),  # Track actual horizons used
                             "hidden_dim": hidden_dim,
                             "num_layers": num_layers,
                             "embedding_dim": emb_dim,
@@ -492,17 +519,28 @@ def scan_transformer(
     no_weather: bool = False,
 ) -> None:
     # Attention-based: chỉ 64,128
-    hidden_dims = [64, 128]
-    num_layers_list = [1, 2, 3]  # số layer Transformer
-    emb_dims = [8, 16, 32]
+    hidden_dims = [128]
+    num_layers_list = [2]  # số layer Transformer
+    emb_dims = [8]
 
     base_config = load_transformer_config(config_path)
     if no_weather:
         remove_weather_features(base_config)
-    prediction_horizons = [1, 2, 3]  # Multi-horizon prediction
+
+    # Scan với các multi-horizon combinations: [1], [1, 2], [1, 2, 3], [1, 2, 3, 4], [1, 2, 3, 4, 5]
+    horizon_combinations = [
+        [1],
+        [1, 2],
+        [1, 2, 3],
+        [1, 2, 3, 4],
+        [1, 2, 3, 4, 5],
+    ]
 
     for seq_len in seq_range:
-        for horizon in horizon_range:
+        # Note: horizon_range không còn cần thiết vì đã scan qua các horizon combinations
+        for prediction_horizons in horizon_combinations:
+            max_horizon = max(prediction_horizons)
+
             # Load dataset một lần cho combination này
             cached_datasets = get_or_load_dataset(
                 csv_path=base_config.csv_path,
@@ -516,7 +554,7 @@ def scan_transformer(
                 for num_layers in num_layers_list:
                     for emb_dim in emb_dims:
                         print(
-                            f"\n=== Transformer | seq_len={seq_len}, horizon={horizon}, "
+                            f"\n=== Transformer | seq_len={seq_len}, horizons={prediction_horizons}, "
                             f"hidden_dim={hidden_dim}, layers={num_layers}, emb_dim={emb_dim} ==="
                         )
                         config: TransformerTrainingConfig = load_transformer_config(
@@ -532,7 +570,7 @@ def scan_transformer(
                             config.segment_embedding_dim = emb_dim
 
                         config.output_dir = make_run_output_dir(
-                            output_root, "transformer", seq_len, horizon
+                            output_root, "transformer", seq_len, max_horizon
                         )
 
                         trainer = create_trainer_with_cached_data(
@@ -547,7 +585,10 @@ def scan_transformer(
                             "model": "Transformer",
                             "primary_horizon": 1,
                             "sequence_length": seq_len,
-                            "prediction_horizon": horizon,
+                            "prediction_horizon": max_horizon,  # Dùng max horizon làm identifier
+                            "prediction_horizons": str(
+                                prediction_horizons
+                            ),  # Track actual horizons used
                             "hidden_dim": hidden_dim,
                             "num_layers": num_layers,
                             "embedding_dim": emb_dim,
@@ -568,18 +609,29 @@ def scan_tcn(
     no_weather: bool = False,
 ) -> None:
     # TCN có thể dùng attention, coi như attention-based: 64,128
-    hidden_dims = [64, 128]
+    hidden_dims = [128]
     # Không có tham số layer rõ ràng, dùng num_layers=0 như placeholder để log
-    num_layers_list = [1, 2, 3]
-    emb_dims = [8, 16, 32]
+    num_layers_list = [2]
+    emb_dims = [8]
 
     base_config = load_tcn_config(config_path)
     if no_weather:
         remove_weather_features(base_config)
-    prediction_horizons = [1, 2, 3]  # Multi-horizon prediction
+
+    # Scan với các multi-horizon combinations: [1], [1, 2], [1, 2, 3], [1, 2, 3, 4], [1, 2, 3, 4, 5]
+    horizon_combinations = [
+        [1],
+        [1, 2],
+        [1, 2, 3],
+        [1, 2, 3, 4],
+        [1, 2, 3, 4, 5],
+    ]
 
     for seq_len in seq_range:
-        for horizon in horizon_range:
+        # Note: horizon_range không còn cần thiết vì đã scan qua các horizon combinations
+        for prediction_horizons in horizon_combinations:
+            max_horizon = max(prediction_horizons)
+
             # Load dataset một lần cho combination này
             cached_datasets = get_or_load_dataset(
                 csv_path=base_config.csv_path,
@@ -593,7 +645,7 @@ def scan_tcn(
                 for num_layers in num_layers_list:
                     for emb_dim in emb_dims:
                         print(
-                            f"\n=== TCN | seq_len={seq_len}, horizon={horizon}, "
+                            f"\n=== TCN | seq_len={seq_len}, horizons={prediction_horizons}, "
                             f"hidden_dim={hidden_dim}, layers={num_layers}, emb_dim={emb_dim} ==="
                         )
                         config: TCNTrainingConfig = load_tcn_config(config_path)
@@ -606,7 +658,7 @@ def scan_tcn(
                             config.segment_embedding_dim = emb_dim
 
                         config.output_dir = make_run_output_dir(
-                            output_root, "tcn", seq_len, horizon
+                            output_root, "tcn", seq_len, max_horizon
                         )
 
                         trainer = create_trainer_with_cached_data(
@@ -621,7 +673,10 @@ def scan_tcn(
                             "model": "TCN",
                             "primary_horizon": 1,
                             "sequence_length": seq_len,
-                            "prediction_horizon": horizon,
+                            "prediction_horizon": max_horizon,  # Dùng max horizon làm identifier
+                            "prediction_horizons": str(
+                                prediction_horizons
+                            ),  # Track actual horizons used
                             "hidden_dim": hidden_dim,
                             "num_layers": num_layers,
                             "embedding_dim": emb_dim,
@@ -642,17 +697,28 @@ def scan_informer(
     no_weather: bool = False,
 ) -> None:
     # Attention-based: 64,128
-    hidden_dims = [64, 128]
-    num_layers_list = [1, 2, 3]  # dùng cho e_layers/d_layers
-    emb_dims = [8, 16, 32]
+    hidden_dims = [128]
+    num_layers_list = [2]  # dùng cho e_layers/d_layers
+    emb_dims = [8]
 
     base_config = load_informer_config(config_path)
     if no_weather:
         remove_weather_features(base_config)
-    prediction_horizons = [1, 2, 3]  # Multi-horizon prediction
+
+    # Scan với các multi-horizon combinations: [1], [1, 2], [1, 2, 3], [1, 2, 3, 4], [1, 2, 3, 4, 5]
+    horizon_combinations = [
+        [1],
+        [1, 2],
+        [1, 2, 3],
+        [1, 2, 3, 4],
+        [1, 2, 3, 4, 5],
+    ]
 
     for seq_len in seq_range:
-        for horizon in horizon_range:
+        # Note: horizon_range không còn cần thiết vì đã scan qua các horizon combinations
+        for prediction_horizons in horizon_combinations:
+            max_horizon = max(prediction_horizons)
+
             # Load dataset một lần cho combination này
             cached_datasets = get_or_load_dataset(
                 csv_path=base_config.csv_path,
@@ -666,7 +732,7 @@ def scan_informer(
                 for num_layers in num_layers_list:
                     for emb_dim in emb_dims:
                         print(
-                            f"\n=== Informer | seq_len={seq_len}, horizon={horizon}, "
+                            f"\n=== Informer | seq_len={seq_len}, horizons={prediction_horizons}, "
                             f"hidden_dim={hidden_dim}, layers={num_layers}, emb_dim={emb_dim} ==="
                         )
                         config: InformerTrainingConfig = load_informer_config(
@@ -675,7 +741,7 @@ def scan_informer(
                         # sequence_length cho dataset và seq_len/out_len cho model
                         config.sequence_length = seq_len
                         config.seq_len = seq_len
-                        config.out_len = horizon
+                        config.out_len = max_horizon
                         config.prediction_horizons = prediction_horizons
                         config.hidden_dim = hidden_dim
                         config.e_layers = num_layers
@@ -686,7 +752,7 @@ def scan_informer(
                             config.segment_embedding_dim = emb_dim
 
                         config.output_dir = make_run_output_dir(
-                            output_root, "informer", seq_len, horizon
+                            output_root, "informer", seq_len, max_horizon
                         )
 
                         trainer = create_trainer_with_cached_data(
@@ -701,7 +767,10 @@ def scan_informer(
                             "model": "Informer",
                             "primary_horizon": 1,
                             "sequence_length": seq_len,
-                            "prediction_horizon": horizon,
+                            "prediction_horizon": max_horizon,  # Dùng max horizon làm identifier
+                            "prediction_horizons": str(
+                                prediction_horizons
+                            ),  # Track actual horizons used
                             "hidden_dim": hidden_dim,
                             "num_layers": num_layers,
                             "embedding_dim": emb_dim,
@@ -722,16 +791,27 @@ def scan_timesnet(
     no_weather: bool = False,
 ) -> None:
     # Attention-based: 64,128
-    hidden_dims = [64, 128]
-    num_layers_list = [1, 2, 3]  # e_layers
+    hidden_dims = [128]
+    num_layers_list = [2]  # e_layers
 
     base_config = load_timesnet_config(config_path)
     if no_weather:
         remove_weather_features(base_config)
-    prediction_horizons = [1, 2, 3]  # Multi-horizon prediction
+
+    # Scan với các multi-horizon combinations: [1], [1, 2], [1, 2, 3], [1, 2, 3, 4], [1, 2, 3, 4, 5]
+    horizon_combinations = [
+        [1],
+        [1, 2],
+        [1, 2, 3],
+        [1, 2, 3, 4],
+        [1, 2, 3, 4, 5],
+    ]
 
     for seq_len in seq_range:
-        for horizon in horizon_range:
+        # Note: horizon_range không còn cần thiết vì đã scan qua các horizon combinations
+        for prediction_horizons in horizon_combinations:
+            max_horizon = max(prediction_horizons)
+
             # Load dataset một lần cho combination này
             cached_datasets = get_or_load_dataset(
                 csv_path=base_config.csv_path,
@@ -744,18 +824,18 @@ def scan_timesnet(
             for hidden_dim in hidden_dims:
                 for num_layers in num_layers_list:
                     print(
-                        f"\n=== TimesNet | seq_len={seq_len}, horizon={horizon}, "
+                        f"\n=== TimesNet | seq_len={seq_len}, horizons={prediction_horizons}, "
                         f"hidden_dim={hidden_dim}, layers={num_layers} ==="
                     )
                     config: TimesNetTrainingConfig = load_timesnet_config(config_path)
                     config.sequence_length = seq_len
                     config.prediction_horizons = prediction_horizons
                     # pred_len cho TimesNet nên >= max horizon
-                    config.pred_len = horizon
+                    config.pred_len = max_horizon
                     config.hidden_dim = hidden_dim
                     config.e_layers = num_layers
                     config.output_dir = make_run_output_dir(
-                        output_root, "timesnet", seq_len, horizon
+                        output_root, "timesnet", seq_len, max_horizon
                     )
 
                     trainer = create_trainer_with_cached_data(
@@ -770,7 +850,10 @@ def scan_timesnet(
                         "model": "TimesNet",
                         "primary_horizon": 1,
                         "sequence_length": seq_len,
-                        "prediction_horizon": horizon,
+                        "prediction_horizon": max_horizon,  # Dùng max horizon làm identifier
+                        "prediction_horizons": str(
+                            prediction_horizons
+                        ),  # Track actual horizons used
                         "hidden_dim": hidden_dim,
                         "num_layers": num_layers,
                         "embedding_dim": "",
@@ -791,17 +874,28 @@ def scan_sota(
     no_weather: bool = False,
 ) -> None:
     # GMAN là attention-based: 64,128
-    hidden_dims = [64, 128]
-    num_layers_list = [1, 2, 3]
-    emb_dims = [8, 16, 32]
+    hidden_dims = [128]
+    num_layers_list = [2]
+    emb_dims = [8]
 
     base_config = load_sota_config(config_path)
     if no_weather:
         remove_weather_features(base_config)
-    prediction_horizons = [1, 2, 3]  # Multi-horizon prediction
+
+    # Scan với các multi-horizon combinations: [1], [1, 2], [1, 2, 3], [1, 2, 3, 4], [1, 2, 3, 4, 5]
+    horizon_combinations = [
+        [1],
+        [1, 2],
+        [1, 2, 3],
+        [1, 2, 3, 4],
+        [1, 2, 3, 4, 5],
+    ]
 
     for seq_len in seq_range:
-        for horizon in horizon_range:
+        # Note: horizon_range không còn cần thiết vì đã scan qua các horizon combinations
+        for prediction_horizons in horizon_combinations:
+            max_horizon = max(prediction_horizons)
+
             # Load dataset một lần cho combination này
             cached_datasets = get_or_load_dataset(
                 csv_path=base_config.csv_path,
@@ -815,7 +909,7 @@ def scan_sota(
                 for num_layers in num_layers_list:
                     for emb_dim in emb_dims:
                         print(
-                            f"\n=== GMAN++ | seq_len={seq_len}, horizon={horizon}, "
+                            f"\n=== GMAN++ | seq_len={seq_len}, horizons={prediction_horizons}, "
                             f"hidden_dim={hidden_dim}, layers={num_layers}, emb_dim={emb_dim} ==="
                         )
                         config: SOTATrainingConfig = load_sota_config(config_path)
@@ -829,7 +923,7 @@ def scan_sota(
                             config.segment_embedding_dim = emb_dim
 
                         config.output_dir = make_run_output_dir(
-                            output_root, "gman", seq_len, horizon
+                            output_root, "gman", seq_len, max_horizon
                         )
 
                         trainer = create_trainer_with_cached_data(
@@ -844,7 +938,10 @@ def scan_sota(
                             "model": "GMAN++",
                             "primary_horizon": 1,
                             "sequence_length": seq_len,
-                            "prediction_horizon": horizon,
+                            "prediction_horizon": max_horizon,  # Dùng max horizon làm identifier
+                            "prediction_horizons": str(
+                                prediction_horizons
+                            ),  # Track actual horizons used
                             "hidden_dim": hidden_dim,
                             "num_layers": num_layers,
                             "embedding_dim": emb_dim,
@@ -951,12 +1048,28 @@ def main() -> None:
     seq_range = range(args.min_seq_len, args.max_seq_len + 1)
     horizon_range = range(args.min_horizon, args.max_horizon + 1)
 
+    print(f"\n📊 [MULTI-HORIZON SCAN] Models will be scanned with:")
+    print(f"   - prediction_horizons = [1]")
+    print(f"   - prediction_horizons = [1, 2]")
+    print(f"   - prediction_horizons = [1, 2, 3]")
+    print(f"   - prediction_horizons = [1, 2, 3, 4]")
+    print(f"   - prediction_horizons = [1, 2, 3, 4, 5]")
+    print(f"   Metrics will be reported for primary horizon = 1")
+    if args.no_weather:
+        print(
+            f"\n🌤️  [NO-WEATHER MODE] Weather features will be removed from all models"
+        )
+    else:
+        print(f"\n🌦️  [WITH-WEATHER MODE] Using all features including weather data")
+    print(f"   Results will be saved to: {args.results_csv}\n")
+
     # Cột cố định cho CSV
     fieldnames: List[str] = [
         "model",
         "primary_horizon",
         "sequence_length",
         "prediction_horizon",
+        "prediction_horizons",  # Track actual horizons used
         "hidden_dim",
         "num_layers",
         "embedding_dim",

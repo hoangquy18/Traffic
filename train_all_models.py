@@ -15,20 +15,46 @@ Kết quả sẽ được lưu vào:
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
+# Add project root to Python path
+script_dir = Path(__file__).parent.absolute()
+project_root = script_dir
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-def run_command(cmd: list, description: str) -> bool:
+
+def run_command(cmd: list, description: str, cwd: Path = None) -> bool:
     """Run a command and return True if successful."""
     print(f"\n{'='*80}")
     print(f"🚀 {description}")
     print(f"{'='*80}")
-    print(f"Command: {' '.join(cmd)}\n")
+    print(f"Command: {' '.join(cmd)}")
+    if cwd:
+        print(f"Working directory: {cwd}\n")
+    else:
+        print()
+
+    # Set PYTHONPATH to include project root
+    env = os.environ.copy()
+    project_root = Path(__file__).parent.absolute()
+    pythonpath = env.get("PYTHONPATH", "")
+    if pythonpath:
+        env["PYTHONPATH"] = f"{project_root}:{pythonpath}"
+    else:
+        env["PYTHONPATH"] = str(project_root)
 
     try:
-        result = subprocess.run(cmd, check=True, capture_output=False)
+        result = subprocess.run(
+            cmd,
+            check=True,
+            capture_output=False,
+            cwd=cwd or project_root,
+            env=env,
+        )
         print(f"\n✅ {description} completed successfully!")
         return True
     except subprocess.CalledProcessError as e:
@@ -103,8 +129,8 @@ def main():
         print("❌ Error: Must run at least with-weather or no-weather mode")
         sys.exit(1)
 
-    # Get script directory
-    script_dir = Path(__file__).parent
+    # Get script directory (project root)
+    script_dir = Path(__file__).parent.absolute()
     ml_script = script_dir / "traffic_trainer" / "trainers" / "ml_grid_search.py"
     dl_script = script_dir / "traffic_trainer" / "trainers" / "dl_scan.py"
 
@@ -114,6 +140,10 @@ def main():
     if not dl_script.exists():
         print(f"❌ Error: DL script not found at {dl_script}")
         sys.exit(1)
+
+    print(f"📁 Project root: {script_dir}")
+    print(f"📄 ML script: {ml_script}")
+    print(f"📄 DL script: {dl_script}\n")
 
     results = []
 
@@ -130,7 +160,7 @@ def main():
                 "experiments/ml_scan_with_weather.csv",
             ]
             success = run_command(
-                cmd, "ML Models - WITH WEATHER (Decision Tree, XGBoost)"
+                cmd, "ML Models - WITH WEATHER (Decision Tree, XGBoost)", cwd=script_dir
             )
             results.append(("ML - WITH WEATHER", success))
 
@@ -144,7 +174,7 @@ def main():
                 "experiments/ml_scan_no_weather.csv",
             ]
             success = run_command(
-                cmd, "ML Models - NO WEATHER (Decision Tree, XGBoost)"
+                cmd, "ML Models - NO WEATHER (Decision Tree, XGBoost)", cwd=script_dir
             )
             results.append(("ML - NO WEATHER", success))
 
@@ -174,6 +204,7 @@ def main():
             success = run_command(
                 cmd,
                 "DL Models - WITH WEATHER (RNN, GNN, Transformer, TCN, TimesNet, GMAN++)",
+                cwd=script_dir,
             )
             results.append(("DL - WITH WEATHER", success))
 
@@ -187,6 +218,7 @@ def main():
             success = run_command(
                 cmd,
                 "DL Models - NO WEATHER (RNN, GNN, Transformer, TCN, TimesNet, GMAN++)",
+                cwd=script_dir,
             )
             results.append(("DL - NO WEATHER", success))
 
